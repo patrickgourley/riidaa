@@ -44,6 +44,7 @@ class SQLiteManager {
     let sequenceNumber = SQLite.Expression<Int64>("sequenceNumber")
     let termTags = SQLite.Expression<String>("termTags")
     let dictionaryId = SQLite.Expression<Int64>("dictionaryId")
+    let exportedToAnki = SQLite.Expression<Bool>("exportedToAnki")
 
     private init() {
         do {
@@ -78,11 +79,13 @@ class SQLiteManager {
                 t.column(sequenceNumber)
                 t.column(termTags)
                 t.column(dictionaryId)
+                t.column(exportedToAnki, defaultValue: false)
                 t.foreignKey(dictionaryId, references: dictionaries, id, delete: .cascade)
                 t.primaryKey(term, reading, definitions, dictionaryId)
             })
             try db?.run(terms.createIndex(term, ifNotExists: true))
             try db?.run(terms.createIndex(reading, ifNotExists: true))
+            try db?.run(terms.addColumn(exportedToAnki, defaultValue: false))
         } catch {
             print("Database setup failed: \(error)")
         }
@@ -180,7 +183,8 @@ class SQLiteManager {
                         termTags: termTags,
                         dictionary: AppManager.shared.dictionaries.first(where: { dic in
                             dic.id == row[self.dictionaryId]
-                        })!
+                        })!,
+                        exportedToAnki: row[self.exportedToAnki]
                     )
                 )
             }

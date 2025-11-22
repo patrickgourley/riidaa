@@ -141,7 +141,6 @@ extension DictionaryDB {
                 }
             }
             
-            // Mark dictionary as up-to-date
             self.hasUpdate = .upToDate
             
         } catch {

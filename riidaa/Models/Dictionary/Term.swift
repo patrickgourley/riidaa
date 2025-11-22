@@ -30,6 +30,7 @@ public class TermDB: Hashable, CustomStringConvertible {
     let sequenceNumber: Int64
     let termTags: [String]
     let dictionary: DictionaryDB
+    let exportedToAnki: Bool
     
     @Published var parseDefinition: [ContentDefinition] = []
     
@@ -37,7 +38,7 @@ public class TermDB: Hashable, CustomStringConvertible {
         "term=\(term) reading=\(reading) defTags=\(definitionTags) types=\(wordTypes) score=\(score) sequence=\(sequenceNumber) termTags=\(termTags)"
     }
     
-    init(term: String, reading: String, definitionTags: [String], wordTypes: [WordType], score: Int64, definitions: Data, sequenceNumber: Int64, termTags: [String], dictionary: DictionaryDB) {
+    init(term: String, reading: String, definitionTags: [String], wordTypes: [WordType], score: Int64, definitions: Data, sequenceNumber: Int64, termTags: [String], dictionary: DictionaryDB, exportedToAnki: Bool) {
         self.term = term
         self.reading = reading
         self.definitionTags = definitionTags
@@ -47,6 +48,7 @@ public class TermDB: Hashable, CustomStringConvertible {
         self.sequenceNumber = sequenceNumber
         self.termTags = termTags
         self.dictionary = dictionary
+        self.exportedToAnki = exportedToAnki
         
         DispatchQueue.global(qos: .userInitiated).async {
             do {
@@ -259,14 +261,11 @@ public struct StructuredContentList: Hashable, CustomStringConvertible {
     var prefix = "\u{2022}"
     
     public var description: String {
-        var ret = ""
-        for x in content {
-            let desc = x.map({ y in
+        return content.map({ x in
+            x.map({ y in
                 y.description
             }).joined(separator: " ")
-            ret += "\(prefix) \(desc)\n"
-        }
-        return ret
+        }).joined(separator: ", ")
     }
 }
 
@@ -303,9 +302,9 @@ public indirect enum StructuredContent: Hashable, Identifiable, CustomStringConv
                 } else {
                     return nil
                 }
-            }).joined(separator: "\n")
+            }).joined(separator: "<br>")
         case .newline:
-            return "\n"
+            return "<br>"
         case .container(let structuredContentContainer):
             return structuredContentContainer.data.description
         case .inlineContainer(let structuredContentContainer):
