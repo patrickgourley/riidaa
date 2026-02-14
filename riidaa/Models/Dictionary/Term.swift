@@ -123,7 +123,7 @@ public class TermDB: Hashable, CustomStringConvertible {
             
             for element in res {
                 switch element {
-                case .inlineContainer(_), .text(_):
+                case .inlineContainer(_), .text(_), .link(_):
                     inlines.append(element)
                 default:
                     if inlines.count > 0 {
@@ -136,7 +136,6 @@ public class TermDB: Hashable, CustomStringConvertible {
             if inlines.count > 0 {
                 result.append(inlines)
             }
-            //            print("result: \(result)\n-----------------------")
             return .array(result)
         }
         if let submap = map as? [String: Any] {
@@ -149,13 +148,14 @@ public class TermDB: Hashable, CustomStringConvertible {
             }
             guard let content = submap["content"] else { return nil }
             guard let parsedContent = parseContent(map: content) else {
-                //                print("sub-submap error? \(map)")
                 return nil
             }
             
             
             switch tag {
-            case "ruby", "rt", "rp", "table", "thead", "tbody", "tfoot", "tr", "div", "li", "details", "summary":
+            case "rt", "rp":
+                return nil
+            case "table", "thead", "tbody", "tfoot", "tr", "div", "li", "details", "summary":
                 if
                     let data = submap["data"] as? [String: Any],
                     let content = data["content"] as? String,
@@ -174,7 +174,7 @@ public class TermDB: Hashable, CustomStringConvertible {
                     }
                 }
                 return .container(tmpSCC)
-            case "span":
+            case "ruby", "span":
                 var tmpSCC = StructuredContentContainer(data: parsedContent, tag: tag)
                 if let style = submap["style"] as? [String: Any] {
                     if let bg = style["backgroundColor"] as? String {
@@ -233,6 +233,26 @@ public struct LinkContent: Hashable {
     public var id: UUID { UUID() }
     var href: String
     let data: StructuredContent
+    
+    public var linkedWord: TermDB? {
+        guard let url = URLComponents(string: self.href),
+              let queryItems = url.queryItems
+        else {
+            return nil
+        }
+        for queryItem in queryItems {
+            if queryItem.name == "query" {
+                guard let query = queryItem.value else {
+                    return nil
+                }
+                let results = SQLiteManager.shared.findTerms(texts: [query])
+                return results.first
+            }
+        }
+        
+//        let results = SQLiteManager.shared.findTerms(texts: mappedTerms.flatMap { $0 })
+        return nil
+    }
 }
 
 public struct StructuredContentContainer: Hashable {

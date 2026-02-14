@@ -160,6 +160,9 @@ extension MangaReaderParserView {
         line: "",
         //        line: "君は学校を何だと思っているのかね",
         parsedText: [
+            ParsingResult(original: "そーゆー", results: [
+                TermDeinflection(term: TermDB(term: "そーゆー", reading: "そーゆー", definitionTags: [], wordTypes: [], score: 200, definitions: "[{\"type\": \"structured-content\", \"content\": {\"tag\": \"div\", \"lang\": \"ja\", \"style\": {\"fontSize\": \"180%\", \"marginTop\": \"0.2em\"}, \"content\": [\"⟶\", {\"tag\": \"a\", \"href\": \"?query=%E3%81%9D%E3%81%86%E8%A8%80%E3%81%86&wildcards=off&primary_reading=%E3%81%9D%E3%81%86%E3%81%84%E3%81%86\", \"content\": [\"そう\", {\"tag\": \"ruby\", \"content\": [\"言\", {\"tag\": \"rt\", \"content\": \"い\"}]}, \"う\"]}]}}, [\"そう言う\", [\"redirected from そーゆー\"]]]".data(using: .utf8)!, sequenceNumber: 1, termTags: [], dictionary: DictionaryDB(id: 1, revision: "", title: "", format: 3), exportedToAnki: false), deinflections: [Deinflection(text: "そーゆー", inflections: [], types: [])])
+            ]),
             ParsingResult(original: "君", results: [
                 TermDeinflection(term: TermDB(term: "君", reading: "きみ", definitionTags: [], wordTypes: [], score: 200, definitions: Data(), sequenceNumber: 1, termTags: [], dictionary: DictionaryDB(id: 1, revision: "", title: "", format: 3), exportedToAnki: false), deinflections: [Deinflection(text: "君", inflections: [], types: [])])
             ]),
@@ -200,7 +203,7 @@ extension MangaReaderParserView {
                 TermDeinflection(term: TermDB(term: "ね", reading: "ね", definitionTags: [], wordTypes: [], score: 200, definitions: Data(), sequenceNumber: 1, termTags: [], dictionary: DictionaryDB(id: 1, revision: "", title: "", format: 3), exportedToAnki: false), deinflections: [Deinflection(text: "ね", inflections: [], types: [])])
             ]),
         ],
-        selectedElement: 5
+        selectedElement: 0
     )
     .environmentObject(SettingsModel())
 }
@@ -265,24 +268,26 @@ struct ResultView: View {
                 
             }
             ForEach(result.deinflections, id: \.inflections) { deinflection in
-                HStack(spacing: 0) {
-                    Text("🚂")
-                        .font(.callout)
-                    ForEach(deinflection.inflections.reversed()) { rule in
-                        Text("«")
+                if !deinflection.inflections.isEmpty {
+                    HStack(spacing: 0) {
+                        Text("🚂")
                             .font(.callout)
-                            .padding([.horizontal], 3)
-                        Button {
-                            withAnimation {
-                                definition = rule.description
-                            }
-                        } label: {
-                            Text(rule.description.short)
+                        ForEach(deinflection.inflections.reversed()) { rule in
+                            Text("«")
                                 .font(.callout)
+                                .padding([.horizontal], 3)
+                            Button {
+                                withAnimation {
+                                    definition = rule.description
+                                }
+                            } label: {
+                                Text(rule.description.short)
+                                    .font(.callout)
+                            }
                         }
                     }
+                    .foregroundStyle(Color(.gray))
                 }
-                .foregroundStyle(Color(.gray))
             }
             HStack {
                 ForEach(result.term.definitionTags) { tag in
@@ -307,19 +312,13 @@ struct ResultView: View {
                     switch (definition) {
                     case .text(let s):
                         Text(s.content)
-                            .padding(.bottom, 10)
                     case .detailed(let d):
                         DetailedView(structuredContent: d)
-                            .padding(.bottom, 10)
-                    default:
-                        Text("TO DO")
-                            .padding(.bottom, 10)
+                    case .deinflection(let d):
+                        EmptyView()
                     }
-                    
-//                    Text("").onAppear() {
-//                        print("def: \(definition)")
-//                    }
                 }
+                .padding(.bottom, 10)
             }
             
         }.onOpenURL { url in
@@ -352,10 +351,12 @@ struct DetailedView: View, Identifiable {
         case .newline:
             Spacer()
         case .link(let l):
-            DetailedView(structuredContent: l.data)
-                .onTapGesture {
-                    print("Open link \(l.href)")
-                }
+//            DetailedView(structuredContent: l.data)
+//            Text("Link: \(l.linkedWord)")
+//                .onTapGesture {
+//                    print("Open link \(l.href)")
+//                }
+            ParserLink(link: l)
         case .container(let c):
             DetailedView(structuredContent: c.data)
                 .background(c.backgroundColor)

@@ -45,20 +45,29 @@ public struct Parser {
                 var terms: [TermDeinflection] = []
          
                 let mappedTerms: [[String]] = deinflections.compactMap({ di in
-                    [di.text, di.text.katakanaToHiragana()]
+                    var array = [di.text, di.text.katakanaToHiragana()]
+                    if di.text.contains("そー") || di.text.contains("こー") || di.text.contains("どー") {
+                        array.append(di.text.replacingOccurrences(of: "そー", with: "そう").replacingOccurrences(of: "こー", with: "こう").replacingOccurrences(of: "どー", with: "どう"))
+                    }
+                    return array
                 })
                 
                 let results = SQLiteManager.shared.findTerms(texts: mappedTerms.flatMap { $0 })
+                
                 for deinflection in deinflections {
                     for term in results where
-                        (term.term.katakanaToHiragana() == deinflection.text.katakanaToHiragana() ||
-                            term.reading.katakanaToHiragana() == deinflection.text.katakanaToHiragana()) &&
-                        (deinflection.types.count == 0 ||
-                             term.wordTypes.count == 0 ||
-                             deinflection.types.inflectionMatch(wl: term.wordTypes)) {
+                    (term.term.katakanaToHiragana() == deinflection.text.katakanaToHiragana().replacingOccurrences(of: "そー", with: "そう").replacingOccurrences(of: "こー", with: "こう").replacingOccurrences(of: "どー", with: "どう") ||
+                     term.reading.katakanaToHiragana() == deinflection.text.katakanaToHiragana().replacingOccurrences(of: "そー", with: "そう").replacingOccurrences(of: "こー", with: "こう").replacingOccurrences(of: "どー", with: "どう") || term.term.katakanaToHiragana() == deinflection.text.katakanaToHiragana() ||
+                     term.reading.katakanaToHiragana() == deinflection.text.katakanaToHiragana()) &&
+                    (deinflection.types.count == 0 ||
+                     term.wordTypes.count == 0 ||
+                     deinflection.types.inflectionMatch(wl: term.wordTypes)) {
                         terms.append(TermDeinflection(term: term, deinflections: [deinflection]))
                     }
                 }
+                
+//                print("Deinflections: \(deinflections)\nResults: \(results)\nTerms: \(terms)\n")
+                
                 if !terms.isEmpty {
                     let groupedTerms = Dictionary(grouping: terms, by: { $0.term })
                     let mergedTerms: [TermDeinflection] = groupedTerms.map { (term, group) in
@@ -82,9 +91,11 @@ public struct Parser {
             }
             
             if !possibilities.isEmpty {
+//                print("Possibilities: \(possibilities)")
                 guard let bestPos = possibilities.max(by: {a, b in
                     guard let af = a.results.first, let bf = b.results.first else {return false}
-                    return (af.term.score >= 0 && bf.term.score >= 0 ? a.original.count < b.original.count : af.term.score < bf.term.score)
+                    return a.original.count == b.original.count ? af.term.score < bf.term.score : a.original.count < b.original.count
+//                    return (af.term.score >= 0 && bf.term.score >= 0 ? a.original.count < b.original.count : af.term.score < bf.term.score)
                 }) else { break }
                 parts.append(bestPos)
                 l += bestPos.original.count
@@ -104,7 +115,6 @@ public struct Parser {
                 l += 1
             }
         }
-//        print(parts)
         return parts
     }
     
