@@ -268,6 +268,7 @@ public struct Inflection : Sendable {
             Inflection(base: "来る", inflection: "来た", baseTypes: [.vk], inflectedTypes: [.ta_form]),
             Inflection(base: "來る", inflection: "來た", baseTypes: [.vk], inflectedTypes: [.ta_form]),
             
+            
             Inflection(base: "いく", inflection: "いった", baseTypes: [.v5], inflectedTypes: [.ta_form]),
             Inflection(base: "行く", inflection: "行った", baseTypes: [.v5], inflectedTypes: [.ta_form]),
             Inflection(base: "逝く", inflection: "逝った", baseTypes: [.v5], inflectedTypes: [.ta_form]),
@@ -293,6 +294,9 @@ public struct Inflection : Sendable {
             Inflection(base: "ます", inflection: "ました", baseTypes: [.masu_form], inflectedTypes: [.ta_form]),
             Inflection(base: "", inflection: "でした", baseTypes: [.masen_form], inflectedTypes: [.ta_form]),
             Inflection(base: "", inflection: "かった", baseTypes: [.masen_form, .n_form], inflectedTypes: [.ta_form]),
+            
+            
+            Inflection(base: "てる", inflection: "てた", baseTypes: [.v1p], inflectedTypes: [.ta_form]),
         ],
         .negative: [
             Inflection(base: "い", inflection: "くない", baseTypes: [.adj_i], inflectedTypes: [.adj_i]),
@@ -671,7 +675,7 @@ public struct Inflection : Sendable {
             Inflection(base: "い", inflection: "さ", baseTypes: [.adj_i], inflectedTypes: [])
         ],
         .passive: [
-            Inflection(base: "う", inflection: "あれる", baseTypes: [.v5], inflectedTypes: [.v1]),
+            Inflection(base: "う", inflection: "われる", baseTypes: [.v5], inflectedTypes: [.v1]),
             Inflection(base: "つ", inflection: "たれる", baseTypes: [.v5], inflectedTypes: [.v1]),
             Inflection(base: "る", inflection: "られる", baseTypes: [.v5], inflectedTypes: [.v1]),
             Inflection(base: "ぬ", inflection: "なれる", baseTypes: [.v5], inflectedTypes: [.v1]),
@@ -679,15 +683,15 @@ public struct Inflection : Sendable {
             Inflection(base: "む", inflection: "まれる", baseTypes: [.v5], inflectedTypes: [.v1]),
             Inflection(base: "く", inflection: "かれる", baseTypes: [.v5], inflectedTypes: [.v1]),
             Inflection(base: "ぐ", inflection: "がれる", baseTypes: [.v5], inflectedTypes: [.v1]),
-            Inflection(base: "す", inflection: "される", baseTypes: [.v5], inflectedTypes: [.v1]),
+            Inflection(base: "す", inflection: "される", baseTypes: [.v5d, .v5sp], inflectedTypes: [.v1]),
             
             Inflection(base: "ずる", inflection: "じされる", baseTypes: [.vz], inflectedTypes: [.v1]),
             Inflection(base: "ずる", inflection: "ぜされる", baseTypes: [.vz], inflectedTypes: [.v1]),
             Inflection(base: "する", inflection: "される", baseTypes: [.vs], inflectedTypes: [.v1]),
             Inflection(base: "為る", inflection: "為れる", baseTypes: [.vs], inflectedTypes: [.v1]),
-//            Inflection(base: "くる", inflection: "こられる", baseTypes: [.vk], inflectedTypes: [.v1]),
-//            Inflection(base: "来る", inflection: "来られる", baseTypes: [.vk], inflectedTypes: [.v1]),
-//            Inflection(base: "來る", inflection: "來られる", baseTypes: [.vk], inflectedTypes: [.v1]),
+            Inflection(base: "くる", inflection: "こられる", baseTypes: [.vk], inflectedTypes: [.v1]),
+            Inflection(base: "来る", inflection: "来られる", baseTypes: [.vk], inflectedTypes: [.v1]),
+            Inflection(base: "來る", inflection: "來られる", baseTypes: [.vk], inflectedTypes: [.v1]),
         ],
         .potential: [
             Inflection(base: "う", inflection: "える", baseTypes: [.v5d], inflectedTypes: [.v1]),
