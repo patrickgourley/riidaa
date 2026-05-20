@@ -8,31 +8,38 @@
 import SwiftUI
 
 struct DictionaryView: View {
-    
+
     @ObservedObject var dictionary: DictionaryDB
     @Environment(\.managedObjectContext) var moc
     @EnvironmentObject var appManager: AppManager
-    
+    @State private var isDeleting = false
+
     var body: some View {
         HStack {
-            VStack(alignment: .leading) {
-                Text(dictionary.title).font(.headline)
-                Text("Version: \(dictionary.revision)").font(.subheadline)
-            }
-            Spacer()
-            switch dictionary.hasUpdate {
-            case UpdateState.updateAvailable:
-                Button("Update") {
-                    print("Updating \(dictionary.title)")
+            if isDeleting {
+                Spacer()
+                ProgressView("Deleting...")
+                Spacer()
+            } else {
+                VStack(alignment: .leading) {
+                    Text(dictionary.title).font(.headline)
+                    Text("Version: \(dictionary.revision)").font(.subheadline)
                 }
-                .buttonStyle(BorderlessButtonStyle())
-                .foregroundColor(.blue)
-            case UpdateState.unknown :
-                ProgressView()
-                    .padding()
-            case UpdateState.upToDate:
-                Text("Up to date")
+                Spacer()
+                switch dictionary.hasUpdate {
+                case UpdateState.updateAvailable:
+                    Button("Update") {
+                        print("Updating \(dictionary.title)")
+                    }
+                    .buttonStyle(BorderlessButtonStyle())
                     .foregroundColor(.blue)
+                case UpdateState.unknown :
+                    ProgressView()
+                        .padding()
+                case UpdateState.upToDate:
+                    Text("Up to date")
+                        .foregroundColor(.blue)
+                }
             }
         }
         .padding()
@@ -44,20 +51,23 @@ struct DictionaryView: View {
         }
         .contextMenu {
             Button(role: .destructive) {
-                autoreleasepool {
-//                    moc.delete(dictionary)
-                    try? SQLiteManager.shared.deleteDictionary(dictionaryId: dictionary.id)
-                    
-                    let idx = appManager.dictionaries.firstIndex(of: dictionary)!
-                    appManager.dictionaries.remove(at: idx)
-//                    CoreDataManager.shared.saveContext()
+                let dictionaryId = dictionary.id
+                isDeleting = true
+                Task.detached(priority: .utility) {
+                    try? SQLiteManager.shared.deleteDictionary(dictionaryId: dictionaryId)
+                    await MainActor.run {
+                        if let idx = appManager.dictionaries.firstIndex(where: { $0.id == dictionaryId }) {
+                            appManager.dictionaries.remove(at: idx)
+                        }
+                    }
                 }
             } label: {
                 Label("Delete dictionary", systemImage: "trash")
             }
         }
+        .disabled(isDeleting)
     }
-    
+
 }
 
 //#Preview {

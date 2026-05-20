@@ -63,7 +63,7 @@ class DictionaryDB: Hashable, ObservableObject, Identifiable {
     var frequencyMode: String? = nil
     
     // Observable property
-    var hasUpdate: UpdateState = .unknown
+    var hasUpdate: UpdateState = .upToDate
 }
 
 extension DictionaryDB {
