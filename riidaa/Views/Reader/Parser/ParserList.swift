@@ -17,7 +17,7 @@ struct ParserList: View {
             EmptyView()
         } else {
             VStack(alignment: .leading) {
-                ForEach(array) { elems in
+                ForEach(Array(array.enumerated()), id: \.offset) { _, elems in
                     HStack(alignment: .top) {
                         if let prefix = prefix {
                             Text(prefix)
@@ -25,7 +25,6 @@ struct ParserList: View {
                         ListElement(array: elems)
                     }
                 }
-                .id(UUID())
             }
         }
     }
@@ -40,7 +39,7 @@ struct ListElement: View {
         case .inlineContainer(_), .text(_), .link(_):
             if array.count > 1 {
                 HStack(alignment: .top, spacing: 5) {
-                    ForEach(array) { elem in
+                    ForEach(Array(array.enumerated()), id: \.offset) { _, elem in
                         switch elem {
                         case .text(let s):
                             ParserText(text: s.content)
@@ -52,16 +51,12 @@ struct ListElement: View {
                                 ParserLink(link: l)
                             }
                         default:
-                            Text("@dleI>\(elem)")
-                                .font(.callout)
-                                .padding([.trailing], 5)
+                            DetailedView(structuredContent: elem)
                         }
                     }
-                    .id(UUID())
                 }
-            } else {
-                DetailedView(structuredContent: array.first!)
-                //                Text("le>\(arr)")
+            } else if let first = array.first {
+                DetailedView(structuredContent: first)
             }
         default:
             if let elem = array.first {
@@ -76,11 +71,9 @@ struct ListElement: View {
                 case .link(let lnk):
                     ParserLink(link: lnk)
                 default:
-                    Text("@dle>\(elem)")
-                    //                    EmptyView()
+                    DetailedView(structuredContent: elem)
                 }
             } else {
-                Text("Empty")
                 EmptyView()
             }
         }

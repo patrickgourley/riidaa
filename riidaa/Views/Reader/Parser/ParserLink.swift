@@ -8,34 +8,41 @@
 import SwiftUI
 
 struct ParserLink: View {
-    
-    @State var link: LinkContent
-    
+
+    let link: LinkContent
+
+    @State private var linked: TermDB?
+    @State private var expanded = false
+
     var body: some View {
-        switch link.data {
-        case .text(let text):
-            ParserText(text: text.content)
-        case .array(let arr):
-            ParserList(array: arr, prefix: nil)
-        case .container(let container):
-            ParserContainer(element: container)
-        default:
-            Text("@lnk>\(link.data)")
-        }
-        if let linkedWord = link.linkedWord {
-            ForEach(linkedWord.parseDefinition, id: \.self) { definition in
-                VStack {
-                    switch (definition) {
-                    case .text(let s):
-                        Text(s.content)
-                    case .detailed(let d):
-                        DetailedView(structuredContent: d)
-                    case .deinflection(let d):
-                        EmptyView()
+        VStack(alignment: .leading, spacing: 4) {
+            Button {
+                if linked != nil {
+                    withAnimation { expanded.toggle() }
+                }
+            } label: {
+                HStack(alignment: .firstTextBaseline, spacing: 2) {
+                    DetailedView(structuredContent: link.data)
+                    if linked != nil {
+                        Image(systemName: expanded ? "chevron.up" : "chevron.down")
+                            .font(.caption2)
                     }
                 }
-                .padding(.bottom, 10)
+                .foregroundColor(.accentColor)
             }
+            .buttonStyle(.plain)
+            .disabled(linked == nil)
+
+            if expanded, let linked {
+                TermDefinitionsView(term: linked)
+                    .padding(.leading, 12)
+            }
+        }
+        .task(id: link.href) {
+            guard let query = link.query else { return }
+            linked = await Task.detached(priority: .userInitiated) {
+                SQLiteManager.shared.findTerms(texts: [query]).first
+            }.value
         }
     }
 }

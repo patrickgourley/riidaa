@@ -633,12 +633,14 @@ public enum InflectionRule: String, Sendable, Identifiable {
                         ]))
                     ],
                     [.inlineContainer(StructuredContentContainer(data: .text(StringContent(content: "Usage:")), tag: "span", font: .title))],
-//                    [
-//                        .list(StructuredContentList(content: [
-//                            [.text(StringContent(content: "Attach ば to the hypothetical form (仮定形) of verbs and i-adjectives."))],
-//                        ]))
-//                    ]
-                    // TODO
+                    [
+                        .list(StructuredContentList(content: [
+                            [.text(StringContent(content: "Change the final 〜う of godan (五段) verbs to 〜え."))],
+                            [.text(StringContent(content: "Attach ろ or よ to the stem of ichidan (一段) verbs."))],
+                            [.text(StringContent(content: "する becomes しろ or せよ."))],
+                            [.text(StringContent(content: "くる becomes こい."))],
+                        ]))
+                    ]
                 ])
             )
         case .continuative:
@@ -651,12 +653,15 @@ public enum InflectionRule: String, Sendable, Identifiable {
                         ]))
                     ],
                     [.inlineContainer(StructuredContentContainer(data: .text(StringContent(content: "Refers to 連用形, the part of the verb after conjugating with -ます and dropping ます")), tag: "span", font: .body))],
-//                    [.inlineContainer(StructuredContentContainer(data: .text(StringContent(content: "Usage:")), tag: "span", font: .title))],
-//                    [
-//                        .list(StructuredContentList(content: [
-//                            [.text(StringContent(content: "Attach ば to the hypothetical form (仮定形) of verbs and i-adjectives."))],
-//                        ]))
-//                    ]
+                    [.inlineContainer(StructuredContentContainer(data: .text(StringContent(content: "Usage:")), tag: "span", font: .title))],
+                    [
+                        .list(StructuredContentList(content: [
+                            [.text(StringContent(content: "Change the final 〜う of godan (五段) verbs to 〜い."))],
+                            [.text(StringContent(content: "Drop る from ichidan (一段) verbs."))],
+                            [.text(StringContent(content: "する becomes し."))],
+                            [.text(StringContent(content: "くる becomes き."))],
+                        ]))
+                    ]
                 ])
             )
         case .sa:
@@ -743,7 +748,7 @@ public enum InflectionRule: String, Sendable, Identifiable {
                         .numberedList(StructuredContentList(content: [
                             [.text(StringContent(content: "Expresses speaker's will or intention."))],
                             [.text(StringContent(content: "Expresses an invitation to the other party."))],
-                            [.text(StringContent(content: "(Used in …ようとする) Indicates being on the verge of initiating an action or transforming a state."))],
+                            [.text(StringContent(content: "(Used in 〜ようとする) Indicates being on the verge of initiating an action or transforming a state."))],
                             [.text(StringContent(content: "Indicates an inference of a matter."))],
                         ]))
                     ],
@@ -751,7 +756,7 @@ public enum InflectionRule: String, Sendable, Identifiable {
                     [
                         .list(StructuredContentList(content: [
                             [.text(StringContent(content: "Attach よう to the irrealis form (未然形) of ichidan verbs."))],
-                            [.text(StringContent(content: "Attach う to the irrealis form (未然形) of godan verbs after -o euphonic change form."))],
+                            [.text(StringContent(content: "Attach う to the irrealis form (未然形) of godan verbs after 〜お euphonic change form."))],
                             [.text(StringContent(content: "Attach かろう to the stem of i-adjectives (4th meaning only)."))],
                         ]))
                     ]
@@ -872,9 +877,9 @@ public enum InflectionRule: String, Sendable, Identifiable {
                     [.inlineContainer(StructuredContentContainer(data: .text(StringContent(content: "Usage:")), tag: "span", font: .title))],
                     [
                         .list(StructuredContentList(content: [
-                            [.text(StringContent(content: "ai：やばい → やべぇ."))],
-                            [.text(StringContent(content: "ui：さむい → さみぃ/さめぇ."))],
-                            [.text(StringContent(content: "oi：すごい → すげぇ."))],
+                            [.text(StringContent(content: "やばい → やべぇ."))],
+                            [.text(StringContent(content: "さむい → さみぃ/さめぇ."))],
+                            [.text(StringContent(content: "すごい → すげぇ."))],
                         ]))
                     ]
                 ])
@@ -907,13 +912,14 @@ public enum InflectionRule: String, Sendable, Identifiable {
                             [.text(StringContent(content: "Negative form of kansai-ben verbs."))],
                         ]))
                     ],
-//                    [.inlineContainer(StructuredContentContainer(data: .text(StringContent(content: "Usage:")), tag: "span", font: .title))],
-//                    [
-//                        .list(StructuredContentList(content: [
-//                            [.text(StringContent(content: "Attach ば to the hypothetical form (仮定形) of verbs and i-adjectives."))],
-//                        ]))
-//                    ]
-                    // TODO
+                    [.inlineContainer(StructuredContentContainer(data: .text(StringContent(content: "Usage:")), tag: "span", font: .title))],
+                    [
+                        .list(StructuredContentList(content: [
+                            [.text(StringContent(content: "ーない → ーへん・ーひん (行かない → 行かへん)"))],
+                            [.text(StringContent(content: "しない → せえへん"))],
+                            [.text(StringContent(content: "ーなかった → ーへんかった・ーひんかった (past)"))],
+                        ]))
+                    ]
                 ])
             )
         case .kansai_te:
@@ -925,12 +931,12 @@ public enum InflectionRule: String, Sendable, Identifiable {
                             [.text(StringContent(content: "ーて form of kansai-ben verbs."))],
                         ]))
                     ],
-//                    [.inlineContainer(StructuredContentContainer(data: .text(StringContent(content: "Usage:")), tag: "span", font: .title))],
-//                    [
-//                        .list(StructuredContentList(content: [
-//                            [.text(StringContent(content: "Attach ば to the hypothetical form (仮定形) of verbs and i-adjectives."))],
-//                        ]))
-//                    ]
+                    [.inlineContainer(StructuredContentContainer(data: .text(StringContent(content: "Usage:")), tag: "span", font: .title))],
+                    [
+                        .list(StructuredContentList(content: [
+                            [.text(StringContent(content: "ーって → ーうて (言って → ゆうて)"))],
+                        ]))
+                    ]
                 ])
             )
         case .kansai_ta:
@@ -942,12 +948,12 @@ public enum InflectionRule: String, Sendable, Identifiable {
                             [.text(StringContent(content: "ーた form of kansai-ben terms."))],
                         ]))
                     ],
-//                    [.inlineContainer(StructuredContentContainer(data: .text(StringContent(content: "Usage:")), tag: "span", font: .title))],
-//                    [
-//                        .list(StructuredContentList(content: [
-//                            [.text(StringContent(content: "Attach ば to the hypothetical form (仮定形) of verbs and i-adjectives."))],
-//                        ]))
-//                    ]
+                    [.inlineContainer(StructuredContentContainer(data: .text(StringContent(content: "Usage:")), tag: "span", font: .title))],
+                    [
+                        .list(StructuredContentList(content: [
+                            [.text(StringContent(content: "ーった → ーうた (言った → ゆうた)"))],
+                        ]))
+                    ]
                 ])
             )
         case .kansai_tara:
@@ -959,12 +965,12 @@ public enum InflectionRule: String, Sendable, Identifiable {
                             [.text(StringContent(content: "ーたら form of kansai-ben terms."))],
                         ]))
                     ],
-//                    [.inlineContainer(StructuredContentContainer(data: .text(StringContent(content: "Usage:")), tag: "span", font: .title))],
-//                    [
-//                        .list(StructuredContentList(content: [
-//                            [.text(StringContent(content: "Attach ば to the hypothetical form (仮定形) of verbs and i-adjectives."))],
-//                        ]))
-//                    ]
+                    [.inlineContainer(StructuredContentContainer(data: .text(StringContent(content: "Usage:")), tag: "span", font: .title))],
+                    [
+                        .list(StructuredContentList(content: [
+                            [.text(StringContent(content: "ーったら → ーうたら (買ったら → 買うたら)"))],
+                        ]))
+                    ]
                 ])
             )
         case .kansai_tari:
@@ -976,12 +982,12 @@ public enum InflectionRule: String, Sendable, Identifiable {
                             [.text(StringContent(content: "ーたり form of kansai-ben terms."))],
                         ]))
                     ],
-//                    [.inlineContainer(StructuredContentContainer(data: .text(StringContent(content: "Usage:")), tag: "span", font: .title))],
-//                    [
-//                        .list(StructuredContentList(content: [
-//                            [.text(StringContent(content: "Attach ば to the hypothetical form (仮定形) of verbs and i-adjectives."))],
-//                        ]))
-//                    ]
+                    [.inlineContainer(StructuredContentContainer(data: .text(StringContent(content: "Usage:")), tag: "span", font: .title))],
+                    [
+                        .list(StructuredContentList(content: [
+                            [.text(StringContent(content: "ーったり → ーうたり (買ったり → 買うたり)"))],
+                        ]))
+                    ]
                 ])
             )
         case .kansai_ku:
@@ -993,12 +999,12 @@ public enum InflectionRule: String, Sendable, Identifiable {
                             [.text(StringContent(content: "ーく stem of kansai-ben adjectives."))],
                         ]))
                     ],
-//                    [.inlineContainer(StructuredContentContainer(data: .text(StringContent(content: "Usage:")), tag: "span", font: .title))],
-//                    [
-//                        .list(StructuredContentList(content: [
-//                            [.text(StringContent(content: "Attach ば to the hypothetical form (仮定形) of verbs and i-adjectives."))],
-//                        ]))
-//                    ]
+                    [.inlineContainer(StructuredContentContainer(data: .text(StringContent(content: "Usage:")), tag: "span", font: .title))],
+                    [
+                        .list(StructuredContentList(content: [
+                            [.text(StringContent(content: "ーく → ーう (高く → たこう)"))],
+                        ]))
+                    ]
                 ])
             )
         case .kansai_adj_te:
@@ -1010,12 +1016,12 @@ public enum InflectionRule: String, Sendable, Identifiable {
                             [.text(StringContent(content: "ーて form of kansai-ben adjectives."))],
                         ]))
                     ],
-//                    [.inlineContainer(StructuredContentContainer(data: .text(StringContent(content: "Usage:")), tag: "span", font: .title))],
-//                    [
-//                        .list(StructuredContentList(content: [
-//                            [.text(StringContent(content: "Attach ば to the hypothetical form (仮定形) of verbs and i-adjectives."))],
-//                        ]))
-//                    ]
+                    [.inlineContainer(StructuredContentContainer(data: .text(StringContent(content: "Usage:")), tag: "span", font: .title))],
+                    [
+                        .list(StructuredContentList(content: [
+                            [.text(StringContent(content: "ーくて → ーうて (高くて → たこうて)"))],
+                        ]))
+                    ]
                 ])
             )
         case .kansai_adj_negative:
@@ -1027,12 +1033,12 @@ public enum InflectionRule: String, Sendable, Identifiable {
                             [.text(StringContent(content: "Negative form of kansai-ben adjectives."))],
                         ]))
                     ],
-//                    [.inlineContainer(StructuredContentContainer(data: .text(StringContent(content: "Usage:")), tag: "span", font: .title))],
-//                    [
-//                        .list(StructuredContentList(content: [
-//                            [.text(StringContent(content: "Attach ば to the hypothetical form (仮定形) of verbs and i-adjectives."))],
-//                        ]))
-//                    ]
+                    [.inlineContainer(StructuredContentContainer(data: .text(StringContent(content: "Usage:")), tag: "span", font: .title))],
+                    [
+                        .list(StructuredContentList(content: [
+                            [.text(StringContent(content: "ーくない → ーうない (高くない → たこうない)"))],
+                        ]))
+                    ]
                 ])
             )
         }

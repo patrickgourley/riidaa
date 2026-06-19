@@ -307,20 +307,8 @@ struct ResultView: View {
                     .background(Color.purple)
                     .roundedCorners(5, corners: .allCorners)
             }
-            ForEach(result.term.parseDefinition, id: \.self) { definition in
-                VStack {
-                    switch (definition) {
-                    case .text(let s):
-                        Text(s.content)
-                    case .detailed(let d):
-                        DetailedView(structuredContent: d)
-                    case .deinflection(let d):
-                        EmptyView()
-                    }
-                }
-                .padding(.bottom, 10)
-            }
-            
+            TermDefinitionsView(term: result.term)
+
         }.onOpenURL { url in
             guard url.scheme == "riidaa",
                   url.host() == "anki-callback",
@@ -333,6 +321,29 @@ struct ResultView: View {
                 // TODO: Save exported state
             }
 
+        }
+    }
+}
+
+/// Renders a `TermDB`'s parsed definitions. Observes the term so the list appears as soon
+/// as `parseDefinition` is populated on the background queue (used for both the main result
+/// and linked entries).
+struct TermDefinitionsView: View {
+    @ObservedObject var term: TermDB
+
+    var body: some View {
+        ForEach(Array(term.parseDefinition.enumerated()), id: \.offset) { _, definition in
+            VStack {
+                switch definition {
+                case .text(let s):
+                    Text(s.content)
+                case .detailed(let d):
+                    DetailedView(structuredContent: d)
+                case .deinflection:
+                    EmptyView()
+                }
+            }
+            .padding(.bottom, 10)
         }
     }
 }
@@ -351,16 +362,15 @@ struct DetailedView: View, Identifiable {
         case .newline:
             Spacer()
         case .link(let l):
-//            DetailedView(structuredContent: l.data)
-//            Text("Link: \(l.linkedWord)")
-//                .onTapGesture {
-//                    print("Open link \(l.href)")
-//                }
             ParserLink(link: l)
         case .container(let c):
-            DetailedView(structuredContent: c.data)
-                .background(c.backgroundColor)
-                .roundedCorners(5, corners: .allCorners)
+            if c.tag == "table" {
+                ParserTable(container: c)
+            } else {
+                DetailedView(structuredContent: c.data)
+                    .background(c.backgroundColor)
+                    .roundedCorners(5, corners: .allCorners)
+            }
         case .inlineContainer(let c):
             DetailedView(structuredContent: c.data)
                 .font(c.font)

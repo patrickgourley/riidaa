@@ -9,7 +9,7 @@
 import Foundation
 import SwiftUI
 
-public class TermDB: Hashable, CustomStringConvertible {
+public class TermDB: ObservableObject, Hashable, CustomStringConvertible {
     
     public static func == (lhs: TermDB, rhs: TermDB) -> Bool {
         return lhs.term == rhs.term && lhs.reading == rhs.reading && lhs.dictionary.id == rhs.dictionary.id
@@ -52,9 +52,12 @@ public class TermDB: Hashable, CustomStringConvertible {
         
         DispatchQueue.global(qos: .userInitiated).async {
             do {
-                let decoded = (try JSONSerialization.jsonObject(with: definitions)) as? [Any]
-                
-                let ret: [ContentDefinition] = decoded!.compactMap { (x: Any) in
+                guard let decoded = (try JSONSerialization.jsonObject(with: definitions)) as? [Any] else {
+                    DispatchQueue.main.async { self.parseDefinition = [] }
+                    return
+                }
+
+                let ret: [ContentDefinition] = decoded.compactMap { (x: Any) in
                     if let def = x as? String {
                         return .text(StringContent(content: def))
                     }
@@ -97,10 +100,10 @@ public class TermDB: Hashable, CustomStringConvertible {
                     print("else1: \(x)")
                     return nil
                 }
-                self.parseDefinition = ret
+                DispatchQueue.main.async { self.parseDefinition = ret }
             } catch {
                 print(error)
-                self.parseDefinition = [.text(StringContent(content: "\(error)"))]
+                DispatchQueue.main.async { self.parseDefinition = [.text(StringContent(content: "\(error)"))] }
             }
         }
     }
@@ -159,7 +162,7 @@ public class TermDB: Hashable, CustomStringConvertible {
                 if
                     let data = submap["data"] as? [String: Any],
                     let content = data["content"] as? String,
-                    content == "example-sentence" || content == "extra-info" || content == "forms" || content == "attribution" {
+                    content == "example-sentence" || content == "extra-info" || content == "attribution" {
                     return nil
                 }
                 var tmpSCC = StructuredContentContainer(data: parsedContent, tag: tag)
@@ -214,8 +217,8 @@ public class TermDB: Hashable, CustomStringConvertible {
                     return .numberedList(StructuredContentList(content: [[parsedContent]]))
                 }
             case "td", "th":
-                guard let rows = submap["rowSpan"] as? Int,
-                      let cols = submap["colSpan"] as? Int else {return nil}
+                let cols = (submap["colSpan"] as? Int) ?? 1
+                let rows = (submap["rowSpan"] as? Int) ?? 1
                 return .table(StructuredContentTable(data: parsedContent, cols: cols, rows: rows))
             case "a":
                 guard let href = submap["href"] as? String else {return nil}
@@ -233,25 +236,23 @@ public struct LinkContent: Hashable {
     public var id: UUID { UUID() }
     var href: String
     let data: StructuredContent
-    
-    public var linkedWord: TermDB? {
+
+    /// The `query` parameter encoded in the link's href (the word the link points to),
+    /// parsed without touching the database so it is safe to read during view rendering.
+    public var query: String? {
         guard let url = URLComponents(string: self.href),
               let queryItems = url.queryItems
         else {
             return nil
         }
-        for queryItem in queryItems {
-            if queryItem.name == "query" {
-                guard let query = queryItem.value else {
-                    return nil
-                }
-                let results = SQLiteManager.shared.findTerms(texts: [query])
-                return results.first
-            }
-        }
-        
-//        let results = SQLiteManager.shared.findTerms(texts: mappedTerms.flatMap { $0 })
-        return nil
+        return queryItems.first(where: { $0.name == "query" })?.value
+    }
+
+    /// Resolves the linked dictionary entry. Performs a synchronous SQLite lookup, so call
+    /// this off the main/render thread (see `ParserLink`), never from a view's `body`.
+    public var linkedWord: TermDB? {
+        guard let query = query else { return nil }
+        return SQLiteManager.shared.findTerms(texts: [query]).first
     }
 }
 

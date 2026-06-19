@@ -27,59 +27,69 @@ public struct ParsingResult : Hashable {
 public struct Parser {
     
     
+    /// Longest candidate token considered at each position. Japanese words are well within
+    /// this; capping bounds the per-line work (was unbounded → O(n²) DB queries on long lines).
+    private static let maxTokenLength = 15
+
+    private static func normalized(_ text: String) -> String {
+        text.katakanaToHiragana().expandLongVowels()
+    }
+
     public static func parse(text: String) -> [ParsingResult] {
         guard !text.isEmpty else { return [] }
+        let chars = Array(text)
+        let n = chars.count
         var l = 0
         var parts: [ParsingResult] = []
-        
-        while l < text.count {
-            var possibilities: [ParsingResult] = []
-            
-            for i in (l...text.count - 1) {
-                let cutBefore = text.index(text.startIndex, offsetBy: l)
-                let cutAfter = text.index(text.endIndex, offsetBy: l-i)
-                let cut = String(text[cutBefore..<cutAfter])
+
+        while l < n {
+            let upper = min(n, l + maxTokenLength)
+
+            // Build every candidate substring starting at `l` and collect all lookup texts,
+            // so the whole position needs a single batched DB query instead of one per length.
+            var candidates: [(cut: String, deinflections: [Deinflection])] = []
+            var lookupTexts = Set<String>()
+            for end in stride(from: upper, to: l, by: -1) {
+                let cut = String(chars[l..<end])
                 let deinflections = Inflection.deinflect(text: cut)
-                
+                candidates.append((cut: cut, deinflections: deinflections))
+                for di in deinflections {
+                    lookupTexts.insert(di.text)
+                    lookupTexts.insert(di.text.katakanaToHiragana())
+                    lookupTexts.insert(Parser.normalized(di.text))
+                }
+            }
+
+            let results = SQLiteManager.shared.findTerms(texts: Array(lookupTexts))
+
+            var possibilities: [ParsingResult] = []
+            for candidate in candidates {
                 var terms: [TermDeinflection] = []
-         
-                let mappedTerms: [[String]] = deinflections.compactMap({ di in
-                    var array = [di.text, di.text.katakanaToHiragana()]
-                    if di.text.contains("そー") || di.text.contains("こー") || di.text.contains("どー") {
-                        array.append(di.text.replacingOccurrences(of: "そー", with: "そう").replacingOccurrences(of: "こー", with: "こう").replacingOccurrences(of: "どー", with: "どう"))
-                    }
-                    return array
-                })
-                
-                let results = SQLiteManager.shared.findTerms(texts: mappedTerms.flatMap { $0 })
-                
-                for deinflection in deinflections {
+                for deinflection in candidate.deinflections {
+                    let target = Parser.normalized(deinflection.text)
                     for term in results where
-                    (term.term.katakanaToHiragana() == deinflection.text.katakanaToHiragana().replacingOccurrences(of: "そー", with: "そう").replacingOccurrences(of: "こー", with: "こう").replacingOccurrences(of: "どー", with: "どう") ||
-                     term.reading.katakanaToHiragana() == deinflection.text.katakanaToHiragana().replacingOccurrences(of: "そー", with: "そう").replacingOccurrences(of: "こー", with: "こう").replacingOccurrences(of: "どー", with: "どう") || term.term.katakanaToHiragana() == deinflection.text.katakanaToHiragana() ||
-                     term.reading.katakanaToHiragana() == deinflection.text.katakanaToHiragana()) &&
-                    (deinflection.types.count == 0 ||
-                     term.wordTypes.count == 0 ||
-                     deinflection.types.inflectionMatch(wl: term.wordTypes)) {
+                        (Parser.normalized(term.term) == target ||
+                         Parser.normalized(term.reading) == target) &&
+                        (deinflection.types.isEmpty ||
+                         term.wordTypes.isEmpty ||
+                         deinflection.types.inflectionMatch(wl: term.wordTypes)) {
                         terms.append(TermDeinflection(term: term, deinflections: [deinflection]))
                     }
                 }
-                
-//                print("Deinflections: \(deinflections)\nResults: \(results)\nTerms: \(terms)\n")
-                
+
                 if !terms.isEmpty {
                     let groupedTerms = Dictionary(grouping: terms, by: { $0.term })
                     let mergedTerms: [TermDeinflection] = groupedTerms.map { (term, group) in
                         let combinedDeinflections = group.flatMap { $0.deinflections }
                         return TermDeinflection(term: term, deinflections: combinedDeinflections)
                     }
-                    
+
                     possibilities.append(ParsingResult(
-                        original: cut,
+                        original: candidate.cut,
                         results: mergedTerms.sorted{
-                            if $0.term.reading == cut && $1.term.reading != cut {
+                            if $0.term.reading == candidate.cut && $1.term.reading != candidate.cut {
                                 return true
-                            } else if $0.term.reading != cut && $1.term.reading == cut {
+                            } else if $0.term.reading != candidate.cut && $1.term.reading == candidate.cut {
                                 return false
                             } else {
                                 return $0.term.score > $1.term.score
@@ -88,18 +98,16 @@ public struct Parser {
                     ))
                 }
             }
-            
+
             if !possibilities.isEmpty {
-//                print("Possibilities: \(possibilities)")
                 guard let bestPos = possibilities.max(by: {a, b in
                     guard let af = a.results.first, let bf = b.results.first else {return false}
                     return a.original.count == b.original.count ? af.term.score < bf.term.score : a.original.count < b.original.count
-//                    return (af.term.score >= 0 && bf.term.score >= 0 ? a.original.count < b.original.count : af.term.score < bf.term.score)
                 }) else { break }
                 parts.append(bestPos)
                 l += bestPos.original.count
             } else {
-                let c = text[text.index(text.startIndex, offsetBy: l)]
+                let c = chars[l]
                 if var lastPart = parts.last, lastPart.results.isEmpty {
                     lastPart.original += String(c)
                     parts[parts.count - 1] = lastPart

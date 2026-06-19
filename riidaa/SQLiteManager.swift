@@ -158,12 +158,19 @@ class SQLiteManager {
     func findTerms(texts: [String]) -> [TermDB] {
         var result: [TermDB] = []
         
+        guard let db = db else { return result }
+
         let query = self.terms.filter(
             texts.contains(self.term) ||
             texts.contains(self.reading)
         )
         do {
-            for row in try db!.prepare(query) {
+            for row in try db.prepare(query) {
+                guard let dictionary = AppManager.shared.dictionaries.first(where: { dic in
+                    dic.id == row[self.dictionaryId]
+                }) else {
+                    continue
+                }
                 let definitionTags = row[self.definitionTags].components(separatedBy: " ").map{
                     $0.replacingOccurrences(of: "\u{a0}", with: " ")
                 }
@@ -181,9 +188,7 @@ class SQLiteManager {
                         definitions: row[definitions],
                         sequenceNumber: row[sequenceNumber],
                         termTags: termTags,
-                        dictionary: AppManager.shared.dictionaries.first(where: { dic in
-                            dic.id == row[self.dictionaryId]
-                        })!,
+                        dictionary: dictionary,
                         exportedToAnki: row[self.exportedToAnki]
                     )
                 )

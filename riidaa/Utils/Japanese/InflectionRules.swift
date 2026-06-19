@@ -972,20 +972,30 @@ public struct Inflection : Sendable {
     }
     
     public static func deinflect(text: String) -> [Deinflection] {
+        func key(_ text: String, _ types: [WordType]) -> String {
+            text + "|" + types.map { $0.rawValue }.sorted().joined(separator: ",")
+        }
+
         var deinflections: [Deinflection] = [Deinflection(text: text, inflections: [], types: [])]
-        
+        // Dedup by (text, types): a given form is only worth expanding once, regardless of which
+        // rule chain produced it. Prevents duplicate work and unbounded growth on pathological input.
+        var seen: Set<String> = [key(text, [])]
+
         var i = 0
         while i < deinflections.count {
             let current_deinflection = deinflections[i]
             for (ruleName, inflections) in Inflection.inflectionRules {
                 for inflection in inflections {
                     if (current_deinflection.types.isEmpty || current_deinflection.types.inflectionMatch(wl: inflection.inflectedTypes)) && inflection.match(text: current_deinflection.text) {
-                        
+
                         let newText = String(current_deinflection.text.dropLast(inflection.inflection.count)) + inflection.base
+                        let newTypes = inflection.baseTypes
+                        let newKey = key(newText, newTypes)
+                        guard seen.insert(newKey).inserted else { continue }
+
                         var newInflections = current_deinflection.inflections
                         newInflections.append(ruleName)
-                        let newTypes = inflection.baseTypes
-                        
+
                         deinflections.append(Deinflection(text: newText, inflections: newInflections, types: newTypes))
                     }
                 }
@@ -995,8 +1005,6 @@ public struct Inflection : Sendable {
         return deinflections.filter({ d in
             d.types.inflectionMatch(wl: [.v, .adj_i])
         })
-        
-//        return deinflections
     }
     
 }

@@ -25,7 +25,7 @@ struct ParserInlineContainer: View {
         case .container(let container):
             ParserContainer(element: container)
         default:
-            Text("@ic>\(element.data)")
+            DetailedView(structuredContent: element.data)
         }
     }
 }

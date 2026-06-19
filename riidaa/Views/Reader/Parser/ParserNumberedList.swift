@@ -23,7 +23,6 @@ struct ParserNumberedList: View {
                         ListElement(array: elems)
                     }
                 }
-                .id(UUID())
             }
         }
     }
