@@ -22,6 +22,7 @@ public struct MangaReader: View {
     @State private var currentLine: String? = nil
     
     @State private var parserOffset: CGFloat = 0
+    @State private var menuVisible = false
     @GestureState private var dragOffset: CGFloat = 0
     @State private var pageHeight = 0.0
     @State private var ready = false
@@ -54,73 +55,6 @@ public struct MangaReader: View {
     
     
     public var body: some View {
-        ZStack {
-            HStack {
-                Button {
-                    dismiss()
-                } label: {
-                    Image(systemName: "chevron.left")
-                        .scaleEffect(1.2)
-                    Text("\(volume.manga.title)")
-                        .frame(maxWidth: UIScreen.main.bounds.width / 3 - 20, alignment: .leading)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                }
-                .padding(.leading, 10)
-                Spacer()
-                
-                SwiftUIWheelPicker(
-                    .init(get: {
-                        if isDualPage {
-                            return settings.isLTR ? currentPage / 2 : (pages.count - 1 - currentPage) / 2
-                        } else {
-                            return settings.isLTR ? currentPage : pages.count - 1 - currentPage
-                        }
-                    }, set: {v in
-                        if isDualPage {
-                            currentPage = settings.isLTR ? v * 2 : max(0, pages.count - 1 - (v * 2))
-                        } else {
-                            currentPage = settings.isLTR ? v : pages.count - 1 - v
-                        }
-                    }),
-                    items: .constant({
-                        if isDualPage {
-                            let c = (pages.count + 1) / 2
-                            return settings.isLTR ? Array(0..<c) : Array(0..<c).reversed()
-                        } else {
-                            return settings.isLTR ? Array(0..<pages.count) : Array(0..<pages.count).reversed()
-                        }
-                    }())
-                ) { value in
-                    GeometryReader { reader in
-                        if isDualPage {
-                            let start = value * 2 + 1
-                            let tmp: String = (start + 1) < pages.count ? (settings.isLTR ? "\(start)-\(start+1)" : "\(start+1)-\(start)") : "\(start)"
-                            Text("\(tmp)")
-                                .frame(width: reader.size.width, height: reader.size.height, alignment: .center)
-                                .background(start-1 == currentPage ? Color(.systemGray6) : Color.clear)
-                                .roundedCorners(10, corners: .allCorners)
-                        } else {
-                            Text("\(value + 1)")
-                                .frame(width: reader.size.width, height: reader.size.height, alignment: .center)
-                                .background(value == currentPage ? Color(.systemGray6) : Color.clear)
-                                .roundedCorners(10, corners: .allCorners)
-                        }
-                    }
-                }
-                .width(.VisibleCount(6))
-                .scrollAlpha(0.4)
-                .frame(height: 40)
-            }
-        }
-        .onRotate { newRotation in
-            orientation = newRotation
-            if newRotation == .landscapeLeft || newRotation == .landscapeRight {
-                ready = false
-                currentPage -= (currentPage%2)
-            }
-        }
-        
         GeometryReader { mainGeom in
             let minHeight = CGFloat(100)//min(mainGeom.size.height * 0.2, max(mainGeom.size.height * 0.1, mainGeom.size.height - pageHeight))
             let maxHeight = mainGeom.size.height * 0.8
@@ -147,7 +81,6 @@ public struct MangaReader: View {
                         let start = settings.isLTR ? 0 : displayedPages.count % 2
                         ForEach(Array(stride(from: start, to: displayedPages.count, by: 2)), id: \.self) { index in
                             VStack(spacing: 0) {
-//                                Text("\(currentPage - (currentPage%2)) \(Int(displayedPages[index].number) - (settings.isLTR ? 1 : 2))")
                                 if index + 1 < displayedPages.count {
                                     doublePageDisplay(index1: index, index2: index + 1)
                                 } else {
@@ -155,9 +88,11 @@ public struct MangaReader: View {
                                 }
                             }
                             .zoomable()
+                            .onTapGesture(count: 1) {
+                                menuVisible.toggle()
+                            }
                             .tag(Int(displayedPages[index].number) - (settings.isLTR ? 1 : 2))
-                            .frame(maxHeight: max(100, mainGeom.size.height - minHeight))
-                            .offset(y: -minHeight/2)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .onAppear {
                                 ready = true
                             }
@@ -168,9 +103,11 @@ public struct MangaReader: View {
                                 pageDisplay(index: index)
                             }
                             .zoomable()
+                            .onTapGesture(count: 1) {
+                                menuVisible.toggle()
+                            }
                             .tag(Int(displayedPages[index].number) - 1)
-                            .frame(maxHeight: max(100, mainGeom.size.height - minHeight))
-                            .offset(y: -minHeight/2)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                         }
                     }
                 }
@@ -180,6 +117,7 @@ public struct MangaReader: View {
                 }
                 .onChange(of: currentPage) { newPage in
                     self.currentLine = nil
+                    self.parserOffset = 0
                     if pages[currentPage].read_at == nil {
                         pages[currentPage].read_at = NSDate()
                     }
@@ -188,42 +126,140 @@ public struct MangaReader: View {
                         CoreDataManager.shared.saveContext()
                     }
                 }
-                
-                VStack(alignment: .center, spacing: 0) {
-                    Capsule()
-                        .frame(width: 50, height: 6)
-                        .foregroundColor(.gray)
-                        .padding(.top, 5)
-                        .padding(.bottom, 5)
-                    
-                    MangaReaderParserView(line: currentLine ?? "")
-                        .frame(maxWidth: .infinity)
+                .ignoresSafeArea()
+
+                VStack(spacing: 0) {
+                    if menuVisible {
+                        topMenu
+                            .transition(.move(edge: .top))
+                    }
+                    Spacer(minLength: 0)
                 }
-                .frame(height: parserHeight(minHeight: minHeight, maxHeight: maxHeight), alignment: .bottom)
-                .background(Color(.systemGray6))
-                .roundedCorners(20, corners: [.topLeft, .topRight])
-                .gesture(
-                    DragGesture(coordinateSpace: .global)
-                        .updating($dragOffset) { value, state, tr in
-                            state = value.translation.height
-                        }
-                        .onEnded { value in
-                            if minHeight + parserOffset-value.translation.height > tHeight2 {
-                                parserOffset = maxHeight - minHeight
-                            } else if minHeight + parserOffset-value.translation.height < tHeight1 || value.translation.height > 0 {
-                                parserOffset = 0
-                            } else {
-                                parserOffset = maxHeight - minHeight
-                            }
-                        }
-                )
-                .animation(.easeIn(duration: 0.15), value: parserOffset)
+                .animation(.easeInOut(duration: 0.25), value: menuVisible)
+                .zIndex(2)
+
+                VStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    if currentLine != nil {
+                        dictPanel(minHeight: minHeight, maxHeight: maxHeight, tHeight1: tHeight1, tHeight2: tHeight2)
+                            .transition(.move(edge: .bottom))
+                    }
+                }
+                .animation(.easeInOut(duration: 0.25), value: currentLine)
+                .zIndex(1)
             }
         }
-        .navigationTitle("\(currentPage + 1)/\(volume.pages.count)")
-        .navigationBarTitleDisplayMode(.inline)
+        .statusBarHidden(!menuVisible)
+        .persistentSystemOverlays(menuVisible ? .automatic : .hidden)
+        .onRotate { newRotation in
+            orientation = newRotation
+            if newRotation == .landscapeLeft || newRotation == .landscapeRight {
+                ready = false
+                currentPage -= (currentPage%2)
+            }
+        }
     }
-    
+
+    @ViewBuilder
+    private var topMenu: some View {
+        HStack {
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "chevron.left")
+                    .scaleEffect(1.2)
+                Text("\(volume.manga.title)")
+                    .frame(maxWidth: UIScreen.main.bounds.width / 3 - 20, alignment: .leading)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            .padding(.leading, 10)
+            Spacer()
+
+            SwiftUIWheelPicker(
+                .init(get: {
+                    if isDualPage {
+                        return settings.isLTR ? currentPage / 2 : (pages.count - 1 - currentPage) / 2
+                    } else {
+                        return settings.isLTR ? currentPage : pages.count - 1 - currentPage
+                    }
+                }, set: {v in
+                    if isDualPage {
+                        currentPage = settings.isLTR ? v * 2 : max(0, pages.count - 1 - (v * 2))
+                    } else {
+                        currentPage = settings.isLTR ? v : pages.count - 1 - v
+                    }
+                }),
+                items: .constant({
+                    if isDualPage {
+                        let c = (pages.count + 1) / 2
+                        return settings.isLTR ? Array(0..<c) : Array(0..<c).reversed()
+                    } else {
+                        return settings.isLTR ? Array(0..<pages.count) : Array(0..<pages.count).reversed()
+                    }
+                }())
+            ) { value in
+                GeometryReader { reader in
+                    if isDualPage {
+                        let start = value * 2 + 1
+                        let tmp: String = (start + 1) < pages.count ? (settings.isLTR ? "\(start)-\(start+1)" : "\(start+1)-\(start)") : "\(start)"
+                        Text("\(tmp)")
+                            .frame(width: reader.size.width, height: reader.size.height, alignment: .center)
+                            .background(start-1 == currentPage ? Color(.systemGray6) : Color.clear)
+                            .roundedCorners(10, corners: .allCorners)
+                    } else {
+                        Text("\(value + 1)")
+                            .frame(width: reader.size.width, height: reader.size.height, alignment: .center)
+                            .background(value == currentPage ? Color(.systemGray6) : Color.clear)
+                            .roundedCorners(10, corners: .allCorners)
+                    }
+                }
+            }
+            .width(.VisibleCount(6))
+            .scrollAlpha(0.4)
+            .frame(height: 40)
+        }
+        .padding(.vertical, 8)
+        .background(.ultraThinMaterial)
+    }
+
+    @ViewBuilder
+    private func dictPanel(minHeight: CGFloat, maxHeight: CGFloat, tHeight1: CGFloat, tHeight2: CGFloat) -> some View {
+        VStack(alignment: .center, spacing: 0) {
+            Capsule()
+                .frame(width: 50, height: 6)
+                .foregroundColor(.gray)
+                .padding(.top, 5)
+                .padding(.bottom, 5)
+
+            MangaReaderParserView(line: currentLine ?? "")
+                .frame(maxWidth: .infinity)
+        }
+        .frame(height: parserHeight(minHeight: minHeight, maxHeight: maxHeight), alignment: .bottom)
+        .background(Color(.systemGray6))
+        .roundedCorners(20, corners: [.topLeft, .topRight])
+        .gesture(
+            DragGesture(coordinateSpace: .global)
+                .updating($dragOffset) { value, state, tr in
+                    state = value.translation.height
+                }
+                .onEnded { value in
+                    if minHeight + parserOffset-value.translation.height > tHeight2 {
+                        parserOffset = maxHeight - minHeight
+                    } else if minHeight + parserOffset-value.translation.height < tHeight1 || value.translation.height > 0 {
+                        if parserOffset == 0 && value.translation.height > 60 {
+                            currentLine = nil
+                        } else {
+                            parserOffset = 0
+                        }
+                    } else {
+                        parserOffset = maxHeight - minHeight
+                    }
+                }
+        )
+        .animation(.easeIn(duration: 0.15), value: parserOffset)
+    }
+
     
     @ViewBuilder
     public func pageDisplay(index: Int) -> some View {
@@ -256,7 +292,7 @@ public struct MangaReader: View {
                 }
                 MangaReaderBoxes(boxes: page.getBoxes(), scale: scale, offsetX: offsetX, offsetY: offsetY, currentLine: $currentLine)
             }
-            .frame(maxWidth: .infinity, alignment: .center)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             .onAppear {
                 pageHeight = Double(page.height) * scale
             }
@@ -320,7 +356,7 @@ public struct MangaReader: View {
                 MangaReaderBoxes(boxes: page2.getBoxes(), scale: scale2, offsetX: offsetX2, offsetY: offsetY2, currentLine: $currentLine)
                     .offset(x: offsetX2)
             }
-            .frame(maxWidth: .infinity, alignment: .top)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             .onAppear {
                 pageHeight = max(Double(page1.height) * scale2, Double(page2.height) * scale2)
             }

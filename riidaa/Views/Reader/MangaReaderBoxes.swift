@@ -40,7 +40,7 @@ struct MangaReaderBoxes: View {
             )
             .rotationEffect(Angle(degrees: box.rotation))
             .highPriorityGesture(SpatialTapGesture(count: 1).onEnded { _ in
-                    currentLine = box.text
+                currentLine = box.text
             })
         }
     }
