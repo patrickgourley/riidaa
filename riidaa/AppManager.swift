@@ -14,44 +14,112 @@ class AppManager : ObservableObject {
     
     @Published var isLoading = true
     @Published var dictionaries: [DictionaryDB] = []
+
+    @Published var deleting: Set<Int64> = []
+    @Published var purging: PurgeProgress? = nil
+
+    @Published var working: [Int64: DictionaryProgress] = [:]
+    @Published var preparing: DictionaryProgress? = nil
+    @Published var lastError: String? = nil
+    
+    func deleteDictionary(id: Int64) {
+        guard !deleting.contains(id) else { return }
+        deleting.insert(id)
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            try? SQLiteManager.shared.deleteDictionary(dictionaryId: id)
+            DispatchQueue.main.async {
+                self.dictionaries.removeAll { $0.id == id }
+                self.deleting.remove(id)
+            }
+            self.purgeOrphanedEntries()
+        }
+    }
+
+    func purgeOrphanedEntries() {
+        purgeQueue.async {
+            SQLiteManager.shared.purgeOrphanedEntries(progress: { cleared, total in
+                let update = PurgeProgress(cleared: cleared, total: total)
+                DispatchQueue.main.async {
+                    self.purging = update.isFinished ? nil : update
+                }
+            })
+            DispatchQueue.main.async { self.purging = nil }
+        }
+    }
+
+    private let purgeQueue = DispatchQueue(label: "dev.repierre.riidaa.purge", qos: .utility)
+
+    func setProgress(_ progress: DictionaryProgress?, for id: Int64?) {
+        DispatchQueue.main.async {
+            guard let id = id else {
+                self.preparing = progress
+                return
+            }
+            self.preparing = nil
+            if let progress = progress {
+                self.working[id] = progress
+            } else {
+                self.working.removeValue(forKey: id)
+            }
+        }
+    }
+
+    func report(error: String?) {
+        DispatchQueue.main.async {
+            self.lastError = error
+            self.preparing = nil
+        }
+    }
     
     private init() {
-        DispatchQueue.main.async {
-            self.loadDictionaries()
-        }
+        loadDictionaries()
+        discardExtractedDictionaries()
+        purgeOrphanedEntries()
     }
-    
-    func loadDictionaries() {
-        self.isLoading = true
-        
-        do {
-            for row in try SQLiteManager.shared.getDatabase()!.prepare(SQLiteManager.shared.dictionaries) {
-                dictionaries.append(DictionaryDB(
-                    id: row[SQLiteManager.shared.id],
-                    revision: row[SQLiteManager.shared.revision],
-                    title: row[SQLiteManager.shared.title],
-                    sequenced: row[SQLiteManager.shared.sequenced],
-                    format: row[SQLiteManager.shared.format],
-                    author: row[SQLiteManager.shared.author],
-                    isUpdatable: row[SQLiteManager.shared.isUpdatable],
-                    indexUrl: row[SQLiteManager.shared.indexUrl],
-                    downloadUrl: row[SQLiteManager.shared.downloadUrl],
-                    url: row[SQLiteManager.shared.url],
-                    description: row[SQLiteManager.shared.description],
-                    attribution: row[SQLiteManager.shared.attribution],
-                    sourceLanguage: row[SQLiteManager.shared.sourceLanguage],
-                    targetLanguage: row[SQLiteManager.shared.targetLanguage],
-                    frequencyMode: row[SQLiteManager.shared.frequencyMode]
-                ))
+
+    /// Removes leftover extractions
+    private func discardExtractedDictionaries() {
+        let fileManager = FileManager.default
+        guard let documents = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            return
+        }
+        let root = documents.appendingPathComponent("dictionaries")
+
+        guard let leftovers = try? fileManager.contentsOfDirectory(at: root, includingPropertiesForKeys: nil),
+              !leftovers.isEmpty else {
+            return
+        }
+
+        DispatchQueue.global(qos: .utility).async {
+            for leftover in leftovers {
+                try? fileManager.removeItem(at: leftover)
             }
-//            for row in try SQLiteManager.shared.getDatabase()!.prepare(SQLiteManager.shared.terms) {
-//                readings.append(row[SQLiteManager.shared.reading])
-//            }
-        } catch {
-            
         }
-        
-        self.isLoading = false
+    }
+
+    func loadDictionaries() {
+        DispatchQueue.main.async { self.isLoading = true }
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            let loaded = SQLiteManager.shared.allDictionaries()
+            DispatchQueue.main.async {
+                self.dictionaries = loaded
+                self.isLoading = false
+            }
+        }
     }
     
+}
+
+struct PurgeProgress: Equatable {
+    let cleared: Int
+    let total: Int
+
+    var fraction: Double {
+        guard total > 0 else { return 0 }
+        return min(1, Double(cleared) / Double(total))
+    }
+
+    var isFinished: Bool { cleared >= total }
 }

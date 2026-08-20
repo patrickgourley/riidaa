@@ -7,12 +7,26 @@
 
 import SwiftUI
 
+struct DictionaryProgress {
+    let message: String
+    let value: Int
+    let total: Int
+
+    var fraction: Double? {
+        guard total > 0 else { return nil }
+        return min(1, Double(value) / Double(total))
+    }
+}
+
 struct DictionaryView: View {
 
     @ObservedObject var dictionary: DictionaryDB
+    var onUpdate: ((DictionaryDB) -> Void)? = nil
+
     @Environment(\.managedObjectContext) var moc
     @EnvironmentObject var appManager: AppManager
-    @State private var isDeleting = false
+    private var isDeleting: Bool { appManager.deleting.contains(dictionary.id) }
+    private var progress: DictionaryProgress? { appManager.working[dictionary.id] }
 
     var body: some View {
         HStack {
@@ -26,19 +40,35 @@ struct DictionaryView: View {
                     Text("Version: \(dictionary.revision)").font(.subheadline)
                 }
                 Spacer()
-                switch dictionary.hasUpdate {
-                case UpdateState.updateAvailable:
-                    Button("Update") {
-                        print("Updating \(dictionary.title)")
+                if let progress = progress {
+                    VStack(alignment: .trailing, spacing: 4) {
+                        if let fraction = progress.fraction {
+                            ProgressView(value: fraction)
+                                .frame(width: 110)
+                        } else {
+                            ProgressView()
+                                .frame(width: 110)
+                        }
+                        Text(progress.message)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
                     }
-                    .buttonStyle(BorderlessButtonStyle())
-                    .foregroundColor(.blue)
-                case UpdateState.unknown :
-                    ProgressView()
-                        .padding()
-                case UpdateState.upToDate:
-                    Text("Up to date")
+                } else {
+                    switch dictionary.hasUpdate {
+                    case UpdateState.updateAvailable:
+                        Button("Update") {
+                            onUpdate?(dictionary)
+                        }
+                        .buttonStyle(BorderlessButtonStyle())
                         .foregroundColor(.blue)
+                    case UpdateState.unknown :
+                        ProgressView()
+                            .padding()
+                    case UpdateState.upToDate:
+                        Text("Up to date")
+                            .foregroundColor(.blue)
+                    }
                 }
             }
         }
@@ -51,16 +81,7 @@ struct DictionaryView: View {
         }
         .contextMenu {
             Button(role: .destructive) {
-                let dictionaryId = dictionary.id
-                isDeleting = true
-                Task.detached(priority: .utility) {
-                    try? SQLiteManager.shared.deleteDictionary(dictionaryId: dictionaryId)
-                    await MainActor.run {
-                        if let idx = appManager.dictionaries.firstIndex(where: { $0.id == dictionaryId }) {
-                            appManager.dictionaries.remove(at: idx)
-                        }
-                    }
-                }
+                appManager.deleteDictionary(id: dictionary.id)
             } label: {
                 Label("Delete dictionary", systemImage: "trash")
             }

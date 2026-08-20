@@ -12,19 +12,47 @@ struct DictionariesView: View {
     
     @EnvironmentObject var appManager: AppManager
     @State private var isPickingDictionary = false
-    @State private var processingStatus = ProcessingStatus.NOTHING
-    @State private var processingMessage: String = "Processing dictionary..."
-    @State private var processingProgress: Int = 0
-    @State private var processingProgressMax: Int = 0
-    
-    private var dismissDisabled: Bool {
-        return processingStatus == ProcessingStatus.STARTED
-    }
     
     var body: some View {
         ScrollView {
-            ForEach($appManager.dictionaries) { dictionary in
-                DictionaryView(dictionary: dictionary.wrappedValue)
+            if let preparing = appManager.preparing {
+                HStack(spacing: 10) {
+                    ProgressView()
+                    Text(preparing.message)
+                        .font(.subheadline)
+                    Spacer()
+                }
+                .padding()
+                .background(Color(.systemGray6))
+                .cornerRadius(10)
+                .padding(.horizontal)
+                .padding(.top, 8)
+            }
+
+            if let purging = appManager.purging {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("Clearing deleted dictionary")
+                            .font(.subheadline)
+                        Spacer()
+                        Text("\(Int(purging.fraction * 100))%")
+                            .font(.subheadline.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                    ProgressView(value: purging.fraction)
+                    Text("\((purging.total - purging.cleared).formatted()) entries left. Lookups keep working while this finishes.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding()
+                .background(Color(.systemGray6))
+                .cornerRadius(10)
+                .padding(.horizontal)
+                .padding(.top, 8)
+            }
+
+            ForEach(appManager.dictionaries) { dictionary in
+                DictionaryView(dictionary: dictionary, onUpdate: updateDictionary)
             }
         }
         .navigationTitle("Dictionaries")
@@ -36,10 +64,6 @@ struct DictionariesView: View {
             }
         }
         .fileImporter(isPresented: $isPickingDictionary, allowedContentTypes: [.zip]) { result in
-            self.processingMessage = "Processing dictionary..."
-            self.processingStatus = ProcessingStatus.STARTED
-            self.processingProgress = 0
-            self.processingProgressMax = 0
             switch result {
             case .success(let file):
                 processZipFile(path: file)
@@ -47,66 +71,91 @@ struct DictionariesView: View {
                 print("error while picking dictionary file: \(error)")
             }
         }
-        .sheet(
-            isPresented: .init(get: {
-                return self.processingStatus != ProcessingStatus.NOTHING
-            }, set: { _ in }),
-            onDismiss: {
-                if self.processingStatus != ProcessingStatus.STARTED {
-                    self.processingStatus = ProcessingStatus.NOTHING
+        .alert(
+            "Dictionary error",
+            isPresented: Binding(
+                get: { appManager.lastError != nil },
+                set: { shown in if !shown { appManager.lastError = nil } }
+            ),
+            actions: { Button("OK", role: .cancel) {} },
+            message: { Text(appManager.lastError ?? "") }
+        )
+    }
+
+    /// Downloads `downloadUrl` and re-imports it, replacing the existing copy.
+    func updateDictionary(_ dictionary: DictionaryDB) {
+        guard let downloadUrl = dictionary.downloadUrl, let url = URL(string: downloadUrl) else {
+            appManager.report(error: "This dictionary does not publish a download link.")
+            return
+        }
+
+        let replacing = dictionary.id
+        appManager.setProgress(DictionaryProgress(message: "Downloading…", value: 0, total: 0), for: replacing)
+
+        Task {
+            do {
+                let (temporary, _) = try await URLSession.shared.download(from: url)
+                // The importer keys off the extension, and a download has none.
+                let archive = temporary.deletingPathExtension().appendingPathExtension("zip")
+                try? FileManager.default.removeItem(at: archive)
+                try FileManager.default.moveItem(at: temporary, to: archive)
+
+                await MainActor.run {
+                    self.processZipFile(path: archive, securityScoped: false, replacing: replacing)
                 }
+            } catch {
+                appManager.setProgress(nil, for: replacing)
+                appManager.report(error: "Download failed: \(error.localizedDescription)")
             }
-        ) {
-            VStack{
-                VStack(spacing: 40) {
-                    switch processingStatus {
-                    case .STARTED:
-                        CircularProgressView(progress: self.processingProgress, progressMax: self.processingProgressMax)
-                            .frame(width: 150, height: 150)
-//                        Text("\(processingProgress) / \(processingProgressMax)")
-                        
-                    case .FINISHED:
-                        Image(systemName: "checkmark")
-                            .scaleEffect(4)
-                            .frame(width: 150, height: 150)
-                    case .ERROR:
-                        Image(systemName: "xmark")
-                            .scaleEffect(4)
-                            .frame(width: 150, height: 150)
-                    case .NOTHING:
-                        EmptyView()
-                    }
-                    Text(processingMessage)
-                        .font(.largeTitle)
-                        .multilineTextAlignment(.center)
-                        .padding()
-                    
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-            .interactiveDismissDisabled(dismissDisabled)
         }
     }
-    
-    func processZipFile(path: URL) {
+
+    func processZipFile(path: URL, securityScoped: Bool = true, replacing: Int64? = nil) {
+        // Snapshot taken here
+        let installedSnapshot = appManager.dictionaries
         DispatchQueue.global(qos: .userInitiated).async {
             let fileManager = FileManager.default
             let documents = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!.appendingPathComponent("dictionaries")
             let dicDirectory = documents.appendingPathComponent(UUID().uuidString)
-            
+
+            // Progress goes to AppManager, which outlives this screen.
+            var done = 0
+            var total = 0
+            var reportingId: Int64? = replacing
+            func report(_ message: String) {
+                appManager.setProgress(
+                    DictionaryProgress(message: message, value: done, total: total),
+                    for: reportingId
+                )
+            }
+
+            // Nothing reads these again once they are in SQLite; jitendex unpacks to 500 MB.
+            defer {
+                try? fileManager.removeItem(at: dicDirectory)
+                if !securityScoped {
+                    // riidaa downloaded this one, so it owns the file too.
+                    try? fileManager.removeItem(at: path)
+                }
+            }
+
             do {
-                if !path.startAccessingSecurityScopedResource() {
+                let scoped = securityScoped && path.startAccessingSecurityScopedResource()
+                if securityScoped && !scoped {
                     throw NSError(domain: "DictionaryImport", code: 0, userInfo: [NSLocalizedDescriptionKey: "Permission denied"])
                 }
                 defer {
-                    path.stopAccessingSecurityScopedResource()
+                    if scoped {
+                        path.stopAccessingSecurityScopedResource()
+                    }
                 }
                 
+                report("Unpacking…")
                 try fileManager.createDirectory(at: dicDirectory, withIntermediateDirectories: true)
                 try fileManager.unzipItem(at: path, to: dicDirectory)
                 
                 let dicContent = try fileManager.contentsOfDirectory(at: dicDirectory, includingPropertiesForKeys: nil)
-                self.processingProgressMax = (dicContent.count)
+                total = dicContent.count
+                report("Processing dictionary…")
                 
                 guard let fileContent = try? Data(contentsOf: dicDirectory.appendingPathComponent("index.json")) else {
                     throw NSError(domain: "DictionaryImport", code: 1, userInfo: [NSLocalizedDescriptionKey: "Could not find dictionary index.json"])
@@ -132,17 +181,59 @@ struct DictionariesView: View {
                 let sourceLanguage = dicJson["sourceLanguage"] as? String
                 let targetLanguage = dicJson["targetLanguage"] as? String
                 let frequencyMode = dicJson["frequencyMode"] as? String
+
+                let alreadyInstalled = installedSnapshot.first { existing in
+                    if existing.id == replacing { return false }
+                    if let indexUrl = indexUrl, let other = existing.indexUrl, !indexUrl.isEmpty {
+                        return other == indexUrl
+                    }
+                    return existing.title == title
+                }
+                if let existing = alreadyInstalled {
+                    let action = replacing == nil
+                        ? "Use Update on it instead, or delete it first."
+                        : "Delete one of them first."
+                    throw NSError(domain: "DictionaryImport", code: 4, userInfo: [
+                        NSLocalizedDescriptionKey: existing.revision == revision
+                            ? "\(existing.title) is already installed."
+                            : "\(existing.title) is already installed (revision \(existing.revision)). \(action)"
+                    ])
+                }
+
                 
-                guard let dictionary = SQLiteManager.shared.insertDictionary(revision: revision, title: title, sequenced: sequenced ?? false, format: format ?? 3, author: author, isUpdatable: isUpdatable ?? false, indexUrl: indexUrl, downloadUrl: downloadUrl, url: url, description: description, attribution: attribution, sourceLanguage: sourceLanguage, targetLanguage: targetLanguage, frequencyMode: frequencyMode) else {
+                var installed: DictionaryDB? = nil
+                // Any throw past this point must take the row with it, or a half-imported
+                // dictionary stays installed and feeds partial results into every lookup.
+                defer {
+                    if let installed = installed {
+                        try? SQLiteManager.shared.deleteDictionary(dictionaryId: installed.id)
+                        DispatchQueue.main.async {
+                            appManager.dictionaries.removeAll { $0.id == installed.id }
+                        }
+                        appManager.purgeOrphanedEntries()
+                    }
+                }
+
+                let dictionaryOrNil = SQLiteManager.shared.insertDictionary(revision: revision, title: title, sequenced: sequenced ?? false, format: format ?? 3, author: author, isUpdatable: isUpdatable ?? false, indexUrl: indexUrl, downloadUrl: downloadUrl, url: url, description: description, attribution: attribution, sourceLanguage: sourceLanguage, targetLanguage: targetLanguage, frequencyMode: frequencyMode)
+                guard let dictionary = dictionaryOrNil else {
                     throw NSError(domain: "DictionaryImport", code: 2, userInfo: [NSLocalizedDescriptionKey: "Error saving dictionary"])
                 }
-                
-                
-                DispatchQueue.main.async {
-                    self.processingProgress += 1
+                installed = dictionary
+                // An update keeps reporting against the row the user can see
+                if replacing == nil {
+                    reportingId = dictionary.id
+                    DispatchQueue.main.async { appManager.dictionaries.append(dictionary) }
                 }
+                report("Importing…")
                 
                 
+                done += 1
+                report("Processing dictionary…")
+                
+                
+                var importedTerms = 0
+                var importedMeta = 0
+
                 var i = 1
                 while true {
                     
@@ -177,24 +268,85 @@ struct DictionariesView: View {
                         guard SQLiteManager.shared.insertTerms(termsInsert: insertTerms) != nil else {
                             throw NSError(domain: "DictionaryImport", code: 2, userInfo: [NSLocalizedDescriptionKey: "Error saving terms"])
                         }
+                        importedTerms += insertTerms.count
                         
                         i += 1
                         
-                        DispatchQueue.main.async {
-                            self.processingProgress += 1
-                        }
+                        done += 1
+                        report("Processing dictionary…")
                     }
                 }
-                
-                DispatchQueue.main.async {
-                    appManager.dictionaries.append(dictionary)
-                    self.processingProgress = self.processingProgressMax
-                    self.processingMessage = "Dictionary processed."
-                    self.processingStatus = ProcessingStatus.FINISHED
+
+                // Pitch and frequency dictionaries ship no term_bank files at all.
+                var m = 1
+                while true {
+                    let filename = "term_meta_bank_\(m).json"
+                    let filepath = dicDirectory.appending(component: filename)
+
+                    guard let fileContent = try? Data(contentsOf: filepath) else {
+                        break
+                    }
+                    try autoreleasepool {
+                        let metaJson = try? JSONSerialization.jsonObject(with: fileContent)
+                        guard let metaJson = metaJson as? [[Any]] else {
+                            throw NSError(domain: "DictionaryImport", code: 2, userInfo: [NSLocalizedDescriptionKey: "Error decoding term metadata"])
+                        }
+                        let insertMeta: [TermMetaInsertion] = metaJson.compactMap({ t in
+                            guard t.count >= 3,
+                                  let term = t[0] as? String,
+                                  let mode = t[1] as? String,
+                                  let parsed = TermMetaParser.parse(mode: mode, data: t[2]),
+                                  let dataEncoded = try? JSONSerialization.data(withJSONObject: t[2], options: [.fragmentsAllowed])
+                            else {
+                                return nil
+                            }
+                            return TermMetaInsertion(term: term, reading: parsed.reading, mode: mode, data: dataEncoded, dictionaryId: dictionary.id)
+                        })
+                        guard SQLiteManager.shared.insertTermMeta(metaInsert: insertMeta) != nil else {
+                            throw NSError(domain: "DictionaryImport", code: 2, userInfo: [NSLocalizedDescriptionKey: "Error saving term metadata"])
+                        }
+                        importedMeta += insertMeta.count
+
+                        m += 1
+
+                        done += 1
+                        report("Processing dictionary…")
+                    }
                 }
+
+                if i == 1 && m == 1 {
+                    throw NSError(domain: "DictionaryImport", code: 3, userInfo: [NSLocalizedDescriptionKey: "This dictionary contains no term or metadata banks."])
+                }
+                
+                var summary: [String] = []
+                if importedTerms > 0 {
+                    summary.append("\(importedTerms.formatted()) entries")
+                }
+                if importedMeta > 0 {
+                    summary.append("\(importedMeta.formatted()) pitch/frequency entries")
+                }
+                let processedMessage = "Imported \(title)\n\(summary.joined(separator: " and "))."
+
+                // Removed only once the replacement is safely in, so a failed update can't
+                // leave the user with nothing.
+                if let replacing = replacing {
+                    try SQLiteManager.shared.deleteDictionary(dictionaryId: replacing)
+                }
+
+                DispatchQueue.main.async {
+                    if let replacing = replacing {
+                        appManager.dictionaries.removeAll { $0.id == replacing }
+                        appManager.dictionaries.append(dictionary)
+                    }
+                    appManager.setProgress(nil, for: dictionary.id)
+                    appManager.setProgress(nil, for: replacing)
+                }
+                installed = nil
+                print("riidaa: \(processedMessage)")
+                appManager.purgeOrphanedEntries()
             } catch {
-                self.processingStatus = ProcessingStatus.ERROR
-                self.processingMessage = error.localizedDescription
+                appManager.setProgress(nil, for: reportingId)
+                appManager.report(error: error.localizedDescription)
                 return
             }
         }
