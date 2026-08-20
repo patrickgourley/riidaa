@@ -20,6 +20,7 @@ enum AnkiFieldToken: String, CaseIterable, Identifiable {
     case meaning
     case glossary
     case sentence
+    case sentenceFurigana
     case source
 
     var id: String { rawValue }
@@ -38,6 +39,7 @@ enum AnkiFieldToken: String, CaseIterable, Identifiable {
         case .meaning: return "meaning"
         case .glossary: return "full glossary"
         case .sentence: return "sentence"
+        case .sentenceFurigana: return "sentence (furigana field)"
         case .source: return "source"
         }
     }
@@ -72,6 +74,8 @@ extension AnkiFieldToken {
             return ["glossary", "glossaries", "definitions", "fullglossary"]
         case .sentence:
             return ["sentence", "examplesentence", "example", "context"]
+        case .sentenceFurigana:
+            return ["sentencefurigana", "examplesentencefurigana"]
         case .source:
             return ["source", "miscinfo", "notes", "book", "title"]
         }
@@ -146,6 +150,45 @@ struct AnkiNoteContext {
             + String(characters[end...])
     }
 
+    /// Like `description`, but without the part-of-speech tags.
+    static func glossary(_ definition: ContentDefinition) -> String {
+        if case .detailed(let content) = definition {
+            return glossary(content)
+        }
+        return definition.description
+    }
+
+    private static func glossary(_ content: StructuredContent) -> String {
+        switch content {
+        case .array(let rows):
+            return rows
+                .filter { row in
+                    row.contains { element in
+                        if case .inlineContainer = element { return false }
+                        return true
+                    }
+                }
+                .map { row in row.map(glossary).filter { !$0.isEmpty }.joined(separator: ", ") }
+                .filter { !$0.isEmpty }
+                .joined(separator: "<br>")
+        case .container(let container), .inlineContainer(let container):
+            return glossary(container.data)
+        case .table(let table):
+            return glossary(table.data)
+        case .link(let link):
+            return glossary(link.data)
+        case .numberedList(let list), .list(let list):
+            return list.content
+                .map { row in row.map(glossary).joined(separator: " ") }
+                .filter { !$0.isEmpty }
+                .joined(separator: ", ")
+        case .text(let string):
+            return string.content
+        case .newline:
+            return "<br>"
+        }
+    }
+
     func value(for token: AnkiFieldToken) -> String? {
         let value: String?
         switch token {
@@ -168,7 +211,7 @@ struct AnkiNoteContext {
         case .frequencySort:
             value = summary.frequencySortValue.map(String.init)
         case .meaning:
-            value = term.parseDefinition.first?.description
+            value = term.parseDefinition.first.map(AnkiNoteContext.glossary)
         case .glossary:
             // Deinflection entries are navigation hints, not meanings.
             value = term.parseDefinition
@@ -176,9 +219,9 @@ struct AnkiNoteContext {
                     if case .deinflection = definition { return false }
                     return true
                 }
-                .map(\.description)
+                .map(AnkiNoteContext.glossary)
                 .joined(separator: "<br>")
-        case .sentence:
+        case .sentence, .sentenceFurigana:
             value = emphasizedSentence
         case .source:
             value = source?.formatted

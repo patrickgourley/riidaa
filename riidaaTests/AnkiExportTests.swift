@@ -116,12 +116,13 @@ struct AnkiExportTests {
 
         let kaishi = AnkiFieldToken.suggestedMapping(
             for: ["Word", "Word Reading", "Word Meaning", "Word Furigana", "Word Audio",
-                  "Sentence", "Notes", "Pitch Accent", "Frequency", "Picture"]
+                  "Sentence", "Sentence Furigana", "Notes", "Pitch Accent", "Frequency", "Picture"]
         )
         #expect(kaishi[.word] == "Word")
         #expect(kaishi[.meaning] == "Word Meaning")
         #expect(kaishi[.pitch] == "Pitch Accent")
         #expect(kaishi[.source] == "Notes")
+        #expect(kaishi[.sentenceFurigana] == "Sentence Furigana")
 
         #expect(AnkiFieldToken.suggestedMapping(for: ["Champ1", "Zzz"]).isEmpty)
     }
