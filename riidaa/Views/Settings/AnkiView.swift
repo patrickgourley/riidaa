@@ -13,113 +13,78 @@ struct AnkiView: View {
     
     var body: some View {
         VStack {
-            VStack(alignment: .leading, spacing: 20) {
-                if let infos = settings.ankiInfo {
-                    HStack {
-                        Text("Choose profile:")
-                            .font(.headline)
-                        
-                        Picker("Profile", selection: $settings.ankiProfile) {
-                            ForEach(infos.profiles) { profile in
-                                Text(profile.name).tag(profile as AnkiInfo.Profile?)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        Spacer()
-                    }
-                    .padding(.top)
-                    
-                    HStack {
-                        Text("Choose deck:")
-                            .font(.headline)
-                        
-                        Picker("Deck", selection: $settings.ankiDeck) {
-                            ForEach(infos.decks) { deck in
-                                Text(deck.name).tag(deck as AnkiInfo.Deck?)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        Spacer()
-                    }
-                    
-                    HStack {
-                        Text("Choose format:")
-                            .font(.headline)
-                        
-                        Picker("Format", selection: $settings.ankiNoteType) {
-                            ForEach(infos.notetypes) { noteType in
-                                Text(noteType.name).tag(noteType as AnkiInfo.NoteType?)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        Spacer()
-                    }
-                    
-                    if let noteType = settings.ankiNoteType {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    if let infos = settings.ankiInfo {
                         HStack {
-                            Text("Choose field for word:")
+                            Text("Choose profile:")
                                 .font(.headline)
-                            
-                            Picker("field", selection: $settings.ankiFieldWord) {
-                                Text("None").tag(nil as String?)
-                                ForEach(noteType.fields) { field in
-                                    Text(field.name).tag(field.name as String?)
+
+                            Picker("Profile", selection: $settings.ankiProfile) {
+                                ForEach(infos.profiles) { profile in
+                                    Text(profile.name).tag(profile as AnkiInfo.Profile?)
                                 }
                             }
                             .pickerStyle(.menu)
                             Spacer()
                         }
-                        
+                        .padding(.top)
+
                         HStack {
-                            Text("Choose field for reading:")
+                            Text("Choose deck:")
                                 .font(.headline)
-                            
-                            Picker("field", selection: $settings.ankiFieldReading) {
-                                Text("None").tag(nil as String?)
-                                ForEach(noteType.fields) { field in
-                                    Text(field.name).tag(field.name as String?)
+
+                            Picker("Deck", selection: $settings.ankiDeck) {
+                                ForEach(infos.decks) { deck in
+                                    Text(deck.name).tag(deck as AnkiInfo.Deck?)
                                 }
                             }
                             .pickerStyle(.menu)
                             Spacer()
                         }
-                        
+
                         HStack {
-                            Text("Choose field for meaning:")
+                            Text("Choose format:")
                                 .font(.headline)
-                            
-                            Picker("field", selection: $settings.ankiFieldMeaning) {
-                                Text("None").tag(nil as String?)
-                                ForEach(noteType.fields) { field in
-                                    Text(field.name).tag(field.name as String?)
+
+                            Picker("Format", selection: $settings.ankiNoteType) {
+                                ForEach(infos.notetypes) { noteType in
+                                    Text(noteType.name).tag(noteType as AnkiInfo.NoteType?)
                                 }
                             }
                             .pickerStyle(.menu)
                             Spacer()
                         }
-                        
-                        HStack {
-                            Text("Choose field for sentence:")
-                                .font(.headline)
-                            
-                            Picker("field", selection: $settings.ankiFieldExample) {
-                                Text("None").tag(nil as String?)
-                                ForEach(noteType.fields) { field in
-                                    Text(field.name).tag(field.name as String?)
+
+                        if let noteType = settings.ankiNoteType {
+                            Button {
+                                settings.autoMapAnkiFields(for: noteType)
+                            } label: {
+                                Label("Match fields automatically", systemImage: "wand.and.stars")
+                            }
+                            .buttonStyle(.bordered)
+
+                            ForEach(AnkiFieldToken.allCases) { token in
+                                HStack {
+                                    Text("Choose field for \(token.label):")
+                                        .font(.headline)
+
+                                    Picker("field", selection: settings.ankiFieldBinding(for: token)) {
+                                        Text("None").tag(nil as String?)
+                                        ForEach(noteType.fields) { field in
+                                            Text(field.name).tag(field.name as String?)
+                                        }
+                                    }
+                                    .pickerStyle(.menu)
+                                    Spacer()
                                 }
                             }
-                            .pickerStyle(.menu)
-                            Spacer()
                         }
                     }
-                    
                 }
-                Spacer()
-                
-                
+                .padding()
             }
-            .padding()
-            
+
             Button("Refresh Anki informations") {
                 fetchAnkiDecks()
             }

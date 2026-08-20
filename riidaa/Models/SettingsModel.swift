@@ -25,6 +25,9 @@ class SettingsModel: ObservableObject {
     
     @AppStorage("padding") var padding = 0.0
     @AppStorage("isLTR") var isLTR = false
+
+    /// Word audio comes from a third-party service (see `WordAudio`), so it can be turned off.
+    @AppStorage("wordAudioEnabled") var wordAudioEnabled = true
     
     @Published var ankiInfo: AnkiInfo? {
         didSet { save(ankiInfo, forKey: "ankiInfo") }
@@ -36,21 +39,15 @@ class SettingsModel: ObservableObject {
         didSet { save(ankiDeck, forKey: "ankiDeck") }
     }
     @Published var ankiNoteType: AnkiInfo.NoteType? {
-        didSet { save(ankiNoteType, forKey: "ankiNoteType") }
+        didSet {
+            save(ankiNoteType, forKey: "ankiNoteType")
+            discardMappingsMissingFromNoteType()
+        }
     }
-    @Published var ankiFieldWord: String? {
-        didSet { save(ankiFieldWord, forKey: "ankiFieldWord") }
+    @Published var ankiFields: [String: String] = [:] {
+        didSet { save(ankiFields, forKey: "ankiFields") }
     }
-    @Published var ankiFieldMeaning: String? {
-        didSet { save(ankiFieldMeaning, forKey: "ankiFieldMeaning") }
-    }
-    @Published var ankiFieldReading: String? {
-        didSet { save(ankiFieldReading, forKey: "ankiFieldReading") }
-    }
-    @Published var ankiFieldExample: String? {
-        didSet { save(ankiFieldExample, forKey: "ankiFieldExample") }
-    }
-    
+
 #if APPSTORE
     var adult = false
 #else
@@ -96,12 +93,75 @@ class SettingsModel: ObservableObject {
         self.ankiProfile = load(forKey: "ankiProfile")
         self.ankiDeck = load(forKey: "ankiDeck")
         self.ankiNoteType = load(forKey: "ankiNoteType")
-        self.ankiFieldWord = load(forKey: "ankiFieldWord")
-        self.ankiFieldReading = load(forKey: "ankiFieldReading")
-        self.ankiFieldMeaning = load(forKey: "ankiFieldMeaning")
-        self.ankiFieldExample = load(forKey: "ankiFieldExample")
+        self.ankiFields = load(forKey: "ankiFields") ?? SettingsModel.migratedAnkiFields()
     }
-    
+
+    private static func migratedAnkiFields() -> [String: String] {
+        let legacyKeys: [(AnkiFieldToken, String)] = [
+            (.word, "ankiFieldWord"),
+            (.reading, "ankiFieldReading"),
+            (.meaning, "ankiFieldMeaning"),
+            (.sentence, "ankiFieldExample"),
+        ]
+        var fields: [String: String] = [:]
+        for (token, key) in legacyKeys {
+            guard let data = UserDefaults.standard.data(forKey: key),
+                  let field = try? JSONDecoder().decode(String.self, from: data) else {
+                continue
+            }
+            fields[token.rawValue] = field
+        }
+        return fields
+    }
+
+    private func discardMappingsMissingFromNoteType() {
+        guard let noteType = ankiNoteType else { return }
+        let available = Set(noteType.fields.map { $0.name })
+        let pruned = ankiFields.filter { available.contains($0.value) }
+        if pruned.count != ankiFields.count {
+            ankiFields = pruned
+        }
+    }
+
+    /// Fills unset tokens only, so a deliberate choice is never overwritten.
+    func autoMapAnkiFields(for noteType: AnkiInfo.NoteType) {
+        let suggestions = AnkiFieldToken.suggestedMapping(for: noteType.fields.map { $0.name })
+        var updated = ankiFields
+        let taken = Set(updated.values)
+        for (token, field) in suggestions where updated[token.rawValue] == nil && !taken.contains(field) {
+            updated[token.rawValue] = field
+        }
+        ankiFields = updated
+    }
+
+    func ankiFieldBinding(for token: AnkiFieldToken) -> Binding<String?> {
+        Binding(
+            get: { self.ankiFields[token.rawValue] },
+            set: { newValue in
+                if let newValue = newValue {
+                    self.ankiFields[token.rawValue] = newValue
+                } else {
+                    self.ankiFields.removeValue(forKey: token.rawValue)
+                }
+            }
+        )
+    }
+
+    var ankiExport: AnkiExport? {
+        guard let profile = ankiProfile, let deck = ankiDeck, let noteType = ankiNoteType else {
+            return nil
+        }
+        // Never send a field the note type doesn't have, whatever is stored.
+        let available = Set(noteType.fields.map { $0.name })
+        var fields: [AnkiFieldToken: String] = [:]
+        for token in AnkiFieldToken.allCases {
+            if let field = ankiFields[token.rawValue], available.contains(field) {
+                fields[token] = field
+            }
+        }
+        return AnkiExport(profile: profile.name, deck: deck.name, noteType: noteType.name, fields: fields)
+    }
+
     private func load<T: Codable>(forKey key: String) -> T? {
         guard let data = UserDefaults.standard.data(forKey: key) else { return nil }
         return try? JSONDecoder().decode(T.self, from: data)

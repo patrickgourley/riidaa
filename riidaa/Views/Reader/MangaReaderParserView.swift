@@ -6,10 +6,13 @@
 //
 
 import SwiftUI
+import AVFoundation
 
 struct MangaReaderParserView: View {
     
     let line: String
+    var source: MangaSource? = nil
+    var pageImage: (() -> UIImage?)? = nil
     @State var parsedText: [ParsingResult] = []
     @State var selectedElement: Int?
     @State var loading = false
@@ -68,7 +71,7 @@ struct MangaReaderParserView: View {
                             ScrollView(showsIndicators: false) {
                                 LazyVStack(alignment: .leading) {
                                     ForEach(parsedText[selectedElement].results, id: \.self) { result in
-                                        ResultView(result: result, fullSentence: line, definition: $inflectionDescription)
+                                        ResultView(result: result, fullSentence: line, source: source, match: sentenceMatch(at: selectedElement), pageImage: pageImage, definition: $inflectionDescription)
                                     }
                                 }
                             }
@@ -106,7 +109,14 @@ struct MangaReaderParserView: View {
 }
 
 extension MangaReaderParserView {
-    
+
+    /// Where the selected token sits in the line
+    func sentenceMatch(at index: Int) -> SentenceMatch? {
+        guard parsedText.indices.contains(index) else { return nil }
+        let offset = parsedText[..<index].reduce(0) { $0 + $1.original.count }
+        return SentenceMatch(surface: parsedText[index].original, offset: offset)
+    }
+
     func parseLine(line: String) {
         DispatchQueue.global(qos: .userInteractive).async {
             self.loading = true
@@ -210,61 +220,55 @@ extension MangaReaderParserView {
 
 
 struct ResultView: View {
-    @State var result: TermDeinflection
-    @State var fullSentence: String
-    
+    var result: TermDeinflection
+    var fullSentence: String
+    var source: MangaSource? = nil
+    var match: SentenceMatch? = nil
+    var pageImage: (() -> UIImage?)? = nil
+
     @Binding var definition: InflectionDescription?
     @EnvironmentObject var settings: SettingsModel
+
+    @State private var meta: [TermMetaDB] = []
+    @State private var audioPlayer: AVPlayer? = nil
+    @State private var audioAvailable = false
+
+    /// Nil unless a real recording exists
+    private var audioURL: URL? {
+        guard settings.wordAudioEnabled, audioAvailable else { return nil }
+        return WordAudio.url(term: result.term.term, reading: result.term.reading)
+    }
+
+    private var summary: TermMetaSummary {
+        TermMetaSummary(meta: meta, reading: result.term.reading)
+    }
     
     var body: some View {
         VStack(alignment: .leading) {
             HStack {
                 Text("\(result.term.term) (\(result.term.reading))")
                     .font(.title)
+                if let audioURL = audioURL {
+                    Button {
+                        play(audioURL)
+                    } label: {
+                        Image(systemName: "speaker.wave.2.fill")
+                            .font(.title3)
+                    }
+                    .accessibilityLabel("Play pronunciation")
+                }
                 Spacer()
                 
-                Button("Export") {
-                    guard
-                        let profileName = settings.ankiProfile?.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-                        let noteTypeName = settings.ankiNoteType?.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-                        let deckName = settings.ankiDeck?.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
-                        return
+                if settings.ankiExport != nil {
+                    Button("Export") {
+                        Task { await export() }
                     }
-                    
-                    var fields = ""
-                    
-                    if let fieldWord = settings.ankiFieldWord, let fieldWorldEncoded = fieldWord.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-                       let wordEncoded = result.term.term.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) {
-                        fields += "&fld\(fieldWorldEncoded)=\(wordEncoded)"
-                    }
-                    if let fieldReading = settings.ankiFieldReading, let fieldReadingEncoded = fieldReading.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-                       let readingEncoded = result.term.reading.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) {
-                        fields += "&fld\(fieldReadingEncoded)=\(readingEncoded)"
-                    }
-                    if let fieldMeaning = settings.ankiFieldMeaning, let fieldMeaningEncoded = fieldMeaning.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-                       let firstMeaning = result.term.parseDefinition.first,
-                       let meaningEncoded = firstMeaning.description.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) {
-                        fields += "&fld\(fieldMeaningEncoded)=\(meaningEncoded)"
-                    }
-                    if let fieldExample = settings.ankiFieldExample, let fieldExampleEncoded = fieldExample.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-                       let exampleEncoded = fullSentence.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) {
-                        fields += "&fld\(fieldExampleEncoded)=\(exampleEncoded)"
-                    }
-                    
-                    if fields.isEmpty {
-                        return
-                    }
-                    guard
-                        let url = URL(string: "anki://x-callback-url/addnote?profile=\(profileName)&deck=\(deckName)&type=\(noteTypeName)&x-success=\("riidaa://anki-callback?term=\(result.term.hashValue)".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")\(fields)") else {
-                        return
-                    }
-                    UIApplication.shared.open(url, options: [:])
+                    .padding(.vertical, 7)
+                    .padding(.horizontal, 10)
+                    .background(Color.blue)
+                    .foregroundColor(.white)
+                    .cornerRadius(7)
                 }
-                .padding(.vertical, 7)
-                .padding(.horizontal, 10)
-                .background(Color.blue)
-                .foregroundColor(.white)
-                .cornerRadius(7)
                 
             }
             ForEach(result.deinflections, id: \.inflections) { deinflection in
@@ -307,9 +311,49 @@ struct ResultView: View {
                     .background(Color.purple)
                     .roundedCorners(5, corners: .allCorners)
             }
+            if !summary.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack {
+                        ForEach(summary.pitchPositions, id: \.self) { position in
+                            Text(position)
+                                .font(.footnote)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 4)
+                                .background(Color.orange)
+                                .roundedCorners(5, corners: .allCorners)
+                        }
+                        ForEach(summary.frequencyLabels, id: \.self) { label in
+                            Text(label)
+                                .font(.footnote)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 4)
+                                .background(Color.green)
+                                .roundedCorners(5, corners: .allCorners)
+                        }
+                    }
+                }
+            }
             TermDefinitionsView(term: result.term)
 
-        }.onOpenURL { url in
+        }
+        .onAppear {
+            let term = result.term
+            if settings.wordAudioEnabled, let candidate = WordAudio.url(term: term.term, reading: term.reading) {
+                WordAudio.checkAvailability(of: candidate) { available in
+                    self.audioAvailable = available
+                }
+            }
+            DispatchQueue.global(qos: .userInitiated).async {
+                let found = SQLiteManager.shared.findTermMeta(texts: [term.term, term.reading])
+                DispatchQueue.main.async {
+                    self.meta = found
+                }
+            }
+        }
+        .onOpenURL { url in
+            if url.scheme == "riidaa", url.host() == "anki-callback" {
+                PageImageServer.shared.stop()
+            }
             guard url.scheme == "riidaa",
                   url.host() == "anki-callback",
                   let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
@@ -322,6 +366,44 @@ struct ResultView: View {
             }
 
         }
+    }
+
+    /// Async because the loopback listener must be up and its port known before the URL can
+    /// name it.
+    private func export() async {
+        guard let export = settings.ankiExport else { return }
+
+        var pictureURL: URL? = nil
+        if export.fields[.picture] != nil, let image = pageImage?() {
+            pictureURL = await PageImageServer.shared.publish(image)
+        }
+
+        let context = AnkiNoteContext(
+            term: result.term,
+            sentence: fullSentence,
+            source: source,
+            match: match,
+            meta: meta,
+            audioURL: audioURL,
+            pictureURL: pictureURL
+        )
+        guard let url = export.addNoteURL(
+            context: context,
+            callback: "riidaa://anki-callback?term=\(result.term.hashValue)"
+        ) else {
+            PageImageServer.shared.stop()
+            return
+        }
+        await UIApplication.shared.open(url, options: [:])
+    }
+
+    /// Playback category so a deliberate tap is audible with the ringer switched off.
+    private func play(_ url: URL) {
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
+        try? AVAudioSession.sharedInstance().setActive(true)
+        let player = AVPlayer(url: url)
+        audioPlayer = player
+        player.play()
     }
 }
 

@@ -10,9 +10,14 @@
 
 import SwiftUI
 
+public enum ZoomEdgeSwipe {
+    case leading, trailing
+}
+
 struct ZoomableModifier: ViewModifier {
     let minZoomScale: CGFloat
     let doubleTapZoomScale: CGFloat
+    let onEdgeSwipe: ((ZoomEdgeSwipe) -> Void)?
 
     @State private var lastTransform: CGAffineTransform = .identity
     @State private var transform: CGAffineTransform = .identity
@@ -98,9 +103,29 @@ struct ZoomableModifier: ViewModifier {
                     )
                 }
             }
-            .onEnded { _ in
+            .onEnded { value in
+                reportEdgeSwipe(value)
                 onEndGesture()
             }
+    }
+
+    /// A horizontal swipe that began already panned against that side has nowhere to go.
+    private func reportEdgeSwipe(_ value: DragGesture.Value) {
+        guard let onEdgeSwipe = onEdgeSwipe, transform != .identity else { return }
+
+        let horizontal = abs(value.translation.width)
+        guard horizontal > 60, horizontal > abs(value.translation.height) * 1.5 else { return }
+
+        // `lastTransform` is the committed position from before this drag began.
+        let maxX = contentSize.width * (lastTransform.scaleX - 1)
+        let atLeadingEdge = lastTransform.tx >= -0.5
+        let atTrailingEdge = lastTransform.tx <= -maxX + 0.5
+
+        if value.translation.width > 0, atLeadingEdge {
+            onEdgeSwipe(.leading)
+        } else if value.translation.width < 0, atTrailingEdge {
+            onEdgeSwipe(.trailing)
+        }
     }
 
     private func onEndGesture() {
@@ -146,11 +171,13 @@ public extension View {
     @ViewBuilder
     func zoomable(
         minZoomScale: CGFloat = 1,
-        doubleTapZoomScale: CGFloat = 2
+        doubleTapZoomScale: CGFloat = 2,
+        onEdgeSwipe: ((ZoomEdgeSwipe) -> Void)? = nil
     ) -> some View {
         modifier(ZoomableModifier(
             minZoomScale: minZoomScale,
-            doubleTapZoomScale: doubleTapZoomScale
+            doubleTapZoomScale: doubleTapZoomScale,
+            onEdgeSwipe: onEdgeSwipe
         ))
     }
 
