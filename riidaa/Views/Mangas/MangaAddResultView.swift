@@ -35,13 +35,40 @@ struct MangaAddResultView : View {
     var body: some View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 8) {
+                Button {
+                    createManga(cover: nil)
+                } label: {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Image(systemName: "plus")
+                            .scaleEffect(2)
+                            .foregroundColor(.gray)
+                            .frame(width: 110, height: 170)
+                            .background(Color(.systemGray3))
+                            .cornerRadius(10)
+
+                        VStack() {
+                            Text("Create without cover")
+                                .font(.callout)
+                                .foregroundColor(.primary)
+                                .lineLimit(2)
+                                .truncationMode(.tail)
+                            Spacer()
+                        }
+                        .frame(height: 49)
+                        .padding(.top, 7)
+                        .padding([.leading, .trailing], 1)
+                    }
+                    .frame(height: 226)
+                }
+                .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
                 PhotosPicker(
                     selection: $customImage,
                     matching: .images,
                     photoLibrary: .shared()
                 ) {
                     VStack(alignment: .leading,spacing: 0) {
-                        Image(systemName: "book")
+                        Image(systemName: "photo")
                             .scaleEffect(2)
                             .foregroundColor(.gray)
                             .frame(width: 110, height: 170)
@@ -50,7 +77,7 @@ struct MangaAddResultView : View {
                         
                         
                         VStack() {
-                            Text("Create title")
+                            Text("Create with a photo")
                                 .font(.callout)
                                 .foregroundColor(.primary)
                                 .lineLimit(2)
@@ -68,6 +95,7 @@ struct MangaAddResultView : View {
                             context: self.moc
                         )
                         newManga.id = UUID()
+                        newManga.added_at = NSDate()
                         newManga.anilist_id = manga.id as NSNumber
                         newManga.title = manga.title.wrappedValue
                         newManga.downloadCover(url: manga.wrappedValue.coverImage, completion: { result in
@@ -124,18 +152,24 @@ struct MangaAddResultView : View {
         }
         .onChange(of: customImage) { value in
             Task {
-                if let value = value {
-                    if let data = try? await value.loadTransferable(type: Data.self) {
-                        let newManga = MangaModel(context: self.moc)
-                        newManga.id = UUID()
-                        newManga.title = self.title
-                        newManga.cover = data
-                        CoreDataManager.shared.saveContext()
-                        dismiss()
-                    }
+                if let value = value, let data = try? await value.loadTransferable(type: Data.self) {
+                    createManga(cover: data)
                 }
             }
         }
+    }
+
+    /// Creates a manga from the typed title. A nil cover shows a placeholder image
+    private func createManga(cover: Data?) {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let newManga = MangaModel(context: self.moc)
+        newManga.id = UUID()
+                        newManga.added_at = NSDate()
+        newManga.title = trimmed
+        newManga.cover = cover
+        CoreDataManager.shared.saveContext()
+        dismiss()
     }
     
     
@@ -144,6 +178,7 @@ struct MangaAddResultView : View {
     private func addManga(manga: MangaResultModel) {
         let newManga = MangaModel(context: self.moc)
         newManga.id = UUID()
+                        newManga.added_at = NSDate()
         newManga.anilist_id = manga.id as NSNumber
         newManga.title = manga.title
         newManga.downloadCover(url: manga.coverImage) { result in
