@@ -14,6 +14,7 @@ enum AnkiFieldToken: String, CaseIterable, Identifiable {
     case audio
     case picture
     case pitch
+    case pitchGraph
     case pitchCategories
     case frequency
     case frequencySort
@@ -32,7 +33,8 @@ enum AnkiFieldToken: String, CaseIterable, Identifiable {
         case .furigana: return "furigana"
         case .audio: return "word audio"
         case .picture: return "page image"
-        case .pitch: return "pitch accent"
+        case .pitch: return "pitch accent (position)"
+        case .pitchGraph: return "pitch accent (diagram)"
         case .pitchCategories: return "pitch pattern"
         case .frequency: return "frequency"
         case .frequencySort: return "frequency (sort value)"
@@ -61,7 +63,9 @@ extension AnkiFieldToken {
         case .picture:
             return ["picture", "image", "screenshot", "definitionpicture"]
         case .pitch:
-            return ["pitch", "pitchaccent", "pitchposition", "accent"]
+            return ["pitchposition", "pitch", "accent"]
+        case .pitchGraph:
+            return ["pitchaccent", "pitchgraph", "pitchdiagram"]
         case .pitchCategories:
             return ["pitchcategories", "pitchpattern", "pitchaccentcategories", "pitchaccentnotes"]
         case .frequency:
@@ -204,6 +208,8 @@ struct AnkiNoteContext {
             value = pictureURL?.absoluteString
         case .pitch:
             value = summary.pitchPositions.joined(separator: " ")
+        case .pitchGraph:
+            value = summary.pitchGraphs.joined(separator: " ")
         case .pitchCategories:
             value = summary.pitchCategories.joined(separator: ",")
         case .frequency:

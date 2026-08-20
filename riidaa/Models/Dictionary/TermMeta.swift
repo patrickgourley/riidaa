@@ -18,11 +18,69 @@ public struct PitchAccent: Hashable {
 
     /// Small kana combine with the preceding mora
     public static func moraCount(of reading: String) -> Int {
+        morae(of: reading).count
+    }
+
+    /// Katakana, as pitch is conventionally written; small kana join the preceding mora.
+    static func morae(of reading: String) -> [String] {
         let combining: Set<Character> = [
-            "ゃ", "ゅ", "ょ", "ぁ", "ぃ", "ぅ", "ぇ", "ぉ", "ゎ",
             "ャ", "ュ", "ョ", "ァ", "ィ", "ゥ", "ェ", "ォ", "ヮ",
         ]
-        return reading.filter { !combining.contains($0) }.count
+        var morae: [String] = []
+        for character in reading {
+            var kana = character
+            if let scalar = character.unicodeScalars.first,
+               character.unicodeScalars.count == 1,
+               (0x3041...0x3096).contains(scalar.value),
+               let shifted = UnicodeScalar(scalar.value + 0x60) {
+                kana = Character(shifted)
+            }
+            if combining.contains(kana), !morae.isEmpty {
+                morae[morae.count - 1].append(kana)
+            } else {
+                morae.append(String(kana))
+            }
+        }
+        return morae
+    }
+
+    /// The pattern drawn as Yomitan and the Kaishi deck draw it
+    public func graph(reading: String) -> String {
+        let overline = "border-color:currentColor;display:block;user-select:none;"
+            + "pointer-events:none;position:absolute;top:0.1em;left:0;right:0;height:0;"
+            + "border-top-width:0.1em;border-top-style:solid;"
+        let drop = "right:-0.1em;height:0.4em;border-right-width:0.1em;border-right-style:solid;"
+
+        let morae = PitchAccent.morae(of: reading)
+        guard !morae.isEmpty else { return "" }
+
+        func isHigh(_ mora: Int) -> Bool {
+            if position == 0 { return mora > 1 }
+            if position == 1 { return mora == 1 }
+            return mora >= 2 && mora <= position
+        }
+
+        var html = ""
+        var index = 0
+        while index < morae.count {
+            let high = isHigh(index + 1)
+            var end = index
+            while end < morae.count, isHigh(end + 1) == high { end += 1 }
+            let text = morae[index..<end].joined()
+
+            if high {
+                let dropsHere = position > 0 && end == position
+                let outer = dropsHere
+                    ? "display:inline-block;position:relative;padding-right:0.1em;margin-right:0.1em;"
+                    : "display:inline-block;position:relative;"
+                html += "<span style=\"\(outer)\"><span style=\"display:inline;\">\(text)</span>"
+                    + "<span style=\"\(overline)\(dropsHere ? drop : "")\"></span></span>"
+            } else {
+                html += text
+            }
+            index = end
+        }
+        return html
     }
 }
 
@@ -135,6 +193,10 @@ public struct TermMetaSummary {
 
     public var pitchPositions: [String] {
         deduplicated(pitches.map { "[\($0.position)]" })
+    }
+
+    public var pitchGraphs: [String] {
+        deduplicated(pitches.map { $0.graph(reading: reading) })
     }
 
     public var pitchCategories: [String] {

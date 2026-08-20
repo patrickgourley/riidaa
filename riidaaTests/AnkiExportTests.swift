@@ -110,6 +110,7 @@ struct AnkiExportTests {
         #expect(mapped[.audio] == "ExpressionAudio")
         #expect(mapped[.picture] == "Picture")
         #expect(mapped[.pitch] == "PitchPosition")
+        #expect(mapped[.pitchGraph] == nil)
         #expect(mapped[.frequency] == "Frequency")
         #expect(mapped[.source] == "MiscInfo")
         #expect(Set(mapped.values).count == mapped.count)
@@ -120,7 +121,10 @@ struct AnkiExportTests {
         )
         #expect(kaishi[.word] == "Word")
         #expect(kaishi[.meaning] == "Word Meaning")
-        #expect(kaishi[.pitch] == "Pitch Accent")
+        // A field called "Pitch Accent" wants the diagram; Lapis names its numeric one
+        // "PitchPosition".
+        #expect(kaishi[.pitchGraph] == "Pitch Accent")
+        #expect(kaishi[.pitch] == nil)
         #expect(kaishi[.source] == "Notes")
         #expect(kaishi[.sentenceFurigana] == "Sentence Furigana")
 
