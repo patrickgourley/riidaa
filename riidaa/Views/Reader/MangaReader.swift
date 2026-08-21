@@ -135,7 +135,7 @@ public struct MangaReader: View {
                 }
                 .onChange(of: currentPage) { newPage in
                     self.currentLine = nil
-                                    if pages[currentPage].read_at == nil {
+                    if pages[currentPage].read_at == nil {
                         pages[currentPage].read_at = NSDate()
                     }
                     volume.lastReadPage = Int64(newPage)
@@ -245,6 +245,7 @@ public struct MangaReader: View {
             source: currentSource,
             pageImage: currentPageImage
         )
+        .padding(.top, 10)
         .presentationDetents([.height(140), .medium, .large])
         .presentationDragIndicator(.visible)
 
