@@ -343,10 +343,21 @@ struct VolumeProcessing: View {
                 EmptyView()
             }
             Text(processingModel.message)
-                .font(.largeTitle)
+                .font(.title2)
                 .multilineTextAlignment(.center)
                 .padding()
-            
+
+            if processingModel.status != ProcessingStatus.STARTED {
+                Button("Done") {
+                    processingModel.status = ProcessingStatus.NOTHING
+                }
+                .font(.headline)
+                .padding(.horizontal, 40)
+                .padding(.vertical, 12)
+                .background(Color.blue)
+                .foregroundColor(.white)
+                .cornerRadius(10)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

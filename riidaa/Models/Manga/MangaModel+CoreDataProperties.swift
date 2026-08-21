@@ -21,6 +21,7 @@ extension MangaModel {
     @NSManaged public var id: UUID
     @NSManaged public var anilist_id: NSNumber?
     @NSManaged public var title: String
+    @NSManaged public var added_at: NSDate?
     @NSManaged public var volumes: NSOrderedSet
 
 }
