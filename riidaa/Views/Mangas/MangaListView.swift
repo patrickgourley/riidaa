@@ -67,7 +67,7 @@ struct MangaListView: View {
 
     /// Only runs for the sort that needs it
     private func refreshLastRead() {
-        guard sort == .lastRead, lastReadByManga.isEmpty else { return }
+        guard sort == .lastRead else { return }
 
         let request = NSFetchRequest<NSDictionary>(entityName: "MangaPageModel")
         request.predicate = NSPredicate(format: "read_at != nil")
@@ -138,6 +138,8 @@ struct MangaListView: View {
                 .sheet(isPresented: $showMangaAddView) {
                     MangaAddView()
                 }
+                .onAppear { refreshLastRead() }
+                .onChange(of: sort) { _ in refreshLastRead() }
         }
         .alert("Rename manga", isPresented: $showRenameAlert, actions: {
             TextField("New manga name", text: $newMangaName)
@@ -152,8 +154,6 @@ struct MangaListView: View {
                 Text("Save")
             }
         })
-        .onAppear { refreshLastRead() }
-        .onChange(of: sort) { _ in refreshLastRead() }
         .photosPicker(isPresented: $showCoverPicker, selection: $pickedCover, matching: .images)
         .onChange(of: pickedCover) { item in
             guard let item = item, let manga = coverTarget else { return }
