@@ -7,17 +7,23 @@
 
 import SwiftUI
 
+struct SelectedLine: Equatable {
+    let text: String
+    let page: Int64
+}
+
 struct MangaReaderBoxes: View {
-    
+
     @EnvironmentObject var settings: SettingsModel
-    
+
     var boxes: [PageBoxModel]
+    var pageNumber: Int64
     var scale: Double
     var offsetX: Double
     var offsetY: Double
-    
-    @Binding var currentLine: String?
-    
+
+    @Binding var currentLine: SelectedLine?
+
     var body: some View {
         ForEach(boxes, id: \.self) { box in
             ZStack {
@@ -40,7 +46,7 @@ struct MangaReaderBoxes: View {
             )
             .rotationEffect(Angle(degrees: box.rotation))
             .highPriorityGesture(SpatialTapGesture(count: 1).onEnded { _ in
-                currentLine = box.text
+                currentLine = SelectedLine(text: box.text, page: pageNumber)
             })
         }
     }

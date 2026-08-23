@@ -15,6 +15,13 @@ struct ReaderSettings: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 Toggle("Left to Right Reader", isOn: settings.$isLTR)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Toggle("Word Audio", isOn: settings.$wordAudioEnabled)
+                    Text("Adds a play button to lookups and an audio value to Anki exports.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
                 
                 
                 Toggle("Use Background Color", isOn: settings.$backgroundColorEnabled)
